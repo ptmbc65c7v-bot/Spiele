@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Solitär (Klondike)</title>
+<style>
+  :root{
+    color-scheme: light dark;
+    --felt:#2e7d4f; --fg:#fff; --panel:#ffffff; --panel-fg:#222; --panel-border:#cfcfcf;
+    --slot:rgba(255,255,255,0.18); --slotb:rgba(255,255,255,0.35);
+    --card:#fff; --cardb:#333; --black:#1a1a1a; --red:#d33; --back1:#3f6fd6; --back2:#28499a;
+    --sel:#f1c40f;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --felt:#123c28; --panel:#2a313a; --panel-fg:#e6e6e6; --panel-border:#4a5560;
+           --card:#ececec; --cardb:#000; --black:#111; --red:#c62; --back1:#31508f; --back2:#1e3161; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family:sans-serif; margin:0; background:var(--felt); color:var(--fg);
+         display:flex; flex-direction:column; align-items:center; padding:10px; }
+  h2 { margin:2px 0 8px; font-size:18px; }
+  #bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center; margin-bottom:8px; font-size:13px; }
+  .btn, select { padding:6px 10px; border:1px solid var(--panel-border); border-radius:6px;
+                 background:var(--panel); color:var(--panel-fg); cursor:pointer; font-size:13px; }
+  #stat { display:flex; gap:14px; font-weight:bold; margin-bottom:8px; font-size:14px; }
+  #table { position:relative; width:100%; max-width:340px; }
+  #topRow { display:flex; justify-content:space-between; margin-bottom:10px; }
+  .group { display:flex; gap:4px; }
+  .slot { width:44px; height:62px; border:1px dashed var(--slotb); border-radius:6px; background:var(--slot); position:relative; }
+  .cols { display:flex; gap:4px; }
+  .col { width:44px; position:relative; min-height:62px; }
+  .card {
+    width:44px; height:62px; border-radius:6px; position:absolute; left:0;
+    border:1px solid var(--cardb); background:var(--card); color:var(--black);
+    font-weight:bold; cursor:pointer; overflow:hidden;
+  }
+  .card .tl { position:absolute; top:2px; left:3px; font-size:12px; line-height:1; }
+  .card .ctr{ position:absolute; top:50%; left:50%; transform:translate(-50%,-45%); font-size:20px; }
+  .card.red { color:var(--red); }
+  .card.down { background:repeating-linear-gradient(45deg,var(--back1),var(--back1) 5px,var(--back2) 5px,var(--back2) 10px); border-color:var(--back2); }
+  .card.sel { outline:3px solid var(--sel); outline-offset:-1px; z-index:50; }
+  @keyframes hintpulse { 0%,100%{ box-shadow:0 0 0 0 rgba(241,196,15,0); } 50%{ box-shadow:0 0 0 5px var(--sel); } }
+  .card.hint, .slot.hint { animation:hintpulse 0.7s ease-in-out 2; outline:2px solid var(--sel); z-index:60; }
+  .btn:disabled { opacity:0.4; cursor:default; }
+  .slot.top-card { border-style:solid; }
+  #stockSlot { display:flex; align-items:center; justify-content:center; font-size:22px; color:var(--fg); }
+  #msg { margin-top:10px; font-weight:bold; min-height:20px; text-align:center; }
+  #lb { margin-top:14px; width:100%; max-width:340px; }
+  #lb table { border-collapse:collapse; width:100%; background:var(--panel); color:var(--panel-fg); border-radius:6px; overflow:hidden; }
+  #lb th,#lb td { border:1px solid var(--panel-border); padding:3px 7px; font-size:13px; text-align:left; }
+  #winForm { display:none; gap:8px; align-items:center; margin-top:10px; justify-content:center; }
+  #winForm input { padding:5px 8px; border:1px solid var(--panel-border); border-radius:6px; background:var(--panel); color:var(--panel-fg); }
+  #placard { display:none; margin-top:12px; padding:12px 16px; border:3px solid var(--sel); border-radius:10px;
+             background:var(--panel); color:var(--panel-fg); text-align:center; font-weight:bold; font-size:15px;
+             box-shadow:0 3px 12px rgba(0,0,0,0.35); max-width:340px; }
+  #placard .big { font-size:23px; display:block; margin-bottom:4px; }
+  #lb tr.me td { background:var(--sel); color:#222; font-weight:bold; }
+</style>
+</head>
+<body>
+  <h2>Solitär · Klondike</h2>
+  <div id="bar">
+    <label>Ziehen:
+      <select id="drawMode">
+        <option value="1" selected>1 Karte</option>
+        <option value="3">3 Karten</option>
+      </select>
+    </label>
+    <button class="btn" onclick="newGame()">Neues Spiel</button>
+    <button class="btn" id="undoBtn" onclick="undo()">↶ Rückgängig</button>
+    <button class="btn" onclick="showHint()">💡 Hinweis</button>
+    <button class="btn" onclick="autoFinish()">Auto-Ablage</button>
+  </div>
+  <div id="stat"><span>Zeit: <span id="timer">0:00</span></span><span>Züge: <span id="moves">0</span></span></div>
+
+  <div id="table">
+    <div id="topRow">
+      <div class="group">
+        <div class="slot" id="stockSlot" data-pile="stock" data-idx="0" data-card="-1"></div>
+        <div class="slot" id="wasteSlot" data-pile="waste" data-idx="0" data-card="-1"></div>
+      </div>
+      <div class="group" id="foundations"></div>
+    </div>
+    <div class="cols" id="cols"></div>
+  </div>
+
+  <div id="msg"></div>
+  <div id="winForm"><label>Name: <input id="pname" maxlength="20" placeholder="Anonym"></label><button class="btn" onclick="saveScore()">Speichern</button></div>
+  <div id="placard"></div>
+  <div id="lb"></div>
+
+<script>
+  const SUITS=['♠','♥','♦','♣'];           // 0♠ 1♥ 2♦ 3♣
+  const FOUND_SUIT=[0,1,2,3];               // feste Farbe je Ablage: ♠ ♥ ♦ ♣
+  const RANKS=['','A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  const isRed = s => s===1||s===2;
+  const FO=20, FD=13, CH=62;
+
+  let stock, waste, foundations, tableau;
+  let sel=null;                 // {pile, idx, card}
+  let seconds=0, timerId=null, started=false, won=false, moves=0, drawMode=1;
+  let lastTap={key:'', t:0};
+  let history=[], suppress=false, hint=null, hintTimer=null;
+  let lastEntryId=null;
+
+  const memStore={};
+  const store={ get(k){try{return localStorage.getItem(k);}catch(e){return k in memStore?memStore[k]:null;}},
+                set(k,v){try{localStorage.setItem(k,v);}catch(e){memStore[k]=v;}} };
+
+  const fmt=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+  function startTimer(){ if(timerId)return; timerId=setInterval(()=>{seconds++;document.getElementById('timer').textContent=fmt(seconds);},1000); }
+  function stopTimer(){ if(timerId){clearInterval(timerId);timerId=null;} }
+  function bumpMove(){ moves++; document.getElementById('moves').textContent=moves; if(!started){started=true;startTimer();} }
+
+  // ---- Rückgängig (Verlauf) ----
+  function snapshot(){ return JSON.stringify({stock,waste,foundations,tableau,moves}); }
+  function commit(){ if(suppress) return; history.push(snapshot()); if(history.length>300) history.shift(); updateUndoBtn(); }
+  function restore(str){ const s=JSON.parse(str); stock=s.stock; waste=s.waste; foundations=s.foundations; tableau=s.tableau; moves=s.moves; document.getElementById('moves').textContent=moves; }
+  function updateUndoBtn(){ const b=document.getElementById('undoBtn'); if(b) b.disabled=history.length===0; }
+  function undo(){
+    if(!history.length) return;
+    restore(history.pop());
+    sel=null; won=false; hint=null;
+    document.getElementById('msg').textContent='';
+    document.getElementById('winForm').style.display='none';
+    if(!timerId && started) startTimer();
+    updateUndoBtn(); render();
+  }
+
+  function newGame(){
+    drawMode=+document.getElementById('drawMode').value;
+    stopTimer(); seconds=0; started=false; won=false; moves=0; sel=null;
+    history=[]; suppress=false; hint=null; if(hintTimer){clearTimeout(hintTimer);hintTimer=null;}
+    lastEntryId=null; document.getElementById('placard').style.display='none';
+    document.getElementById('timer').textContent='0:00';
+    document.getElementById('moves').textContent='0';
+    document.getElementById('msg').textContent='';
+    document.getElementById('winForm').style.display='none';
+
+    const deck=[];
+    for(let s=0;s<4;s++) for(let r=1;r<=13;r++) deck.push({suit:s,rank:r,up:false});
+    for(let i=deck.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [deck[i],deck[j]]=[deck[j],deck[i]]; }
+
+    tableau=[[],[],[],[],[],[],[]];
+    for(let c=0;c<7;c++) for(let n=0;n<=c;n++){ const card=deck.pop(); card.up=(n===c); tableau[c].push(card); }
+    stock=deck; stock.forEach(c=>c.up=false);
+    waste=[]; foundations=[[],[],[],[]];
+    render(); renderLB(); updateUndoBtn();
+  }
+
+  // ---- Regeln ----
+  function color(c){ return isRed(c.suit)?'r':'b'; }
+  function foundationAccepts(fIdx, card){
+    if(card.suit!==FOUND_SUIT[fIdx]) return false;
+    const f=foundations[fIdx];
+    if(f.length===0) return card.rank===1;
+    const t=f[f.length-1]; return card.rank===t.rank+1;
+  }
+  function tableauAccepts(t, card){
+    if(t.length===0) return card.rank===13;
+    const top=t[t.length-1]; return top.up && color(top)!==color(card) && card.rank===top.rank-1;
+  }
+  function validRun(cards){
+    for(let i=1;i<cards.length;i++){
+      if(!cards[i].up) return false;
+      if(cards[i].rank!==cards[i-1].rank-1) return false;
+      if(color(cards[i])===color(cards[i-1])) return false;
+    }
+    return cards[0].up;
+  }
+
+  function pileArray(pile, idx){
+    if(pile==='waste') return waste;
+    if(pile==='found') return foundations[idx];
+    if(pile==='tab') return tableau[idx];
+    if(pile==='stock') return stock;
+    return null;
+  }
+
+  function draw(){
+    if(stock.length===0){
+      if(waste.length===0) return;
+      commit();
+      while(waste.length){ const c=waste.pop(); c.up=false; stock.push(c); }
+      bumpMove(); render(); return;
+    }
+    commit();
+    const n=Math.min(drawMode, stock.length);
+    for(let i=0;i<n;i++){ const c=stock.pop(); c.up=true; waste.push(c); }
+    bumpMove(); render();
+  }
+
+  function canPickup(pile, idx, cardIdx){
+    const arr=pileArray(pile,idx);
+    if(pile==='waste') return cardIdx===arr.length-1 && arr.length>0;
+    if(pile==='found') return cardIdx===arr.length-1 && arr.length>0;
+    if(pile==='tab'){ if(cardIdx<0||cardIdx>=arr.length) return false; return validRun(arr.slice(cardIdx)); }
+    return false;
+  }
+
+  function tryMove(srcPile, srcIdx, cardIdx, dstPile, dstIdx){
+    const src=pileArray(srcPile,srcIdx);
+    const run=src.slice(cardIdx);
+    if(dstPile==='found'){
+      if(run.length!==1) return false;
+      if(!foundationAccepts(dstIdx, run[0])) return false;
+      commit();
+      foundations[dstIdx].push(src.pop());
+    } else if(dstPile==='tab'){
+      if(!tableauAccepts(tableau[dstIdx], run[0])) return false;
+      commit();
+      src.splice(cardIdx); tableau[dstIdx].push(...run);
+    } else return false;
+    if(srcPile==='tab' && src.length && !src[src.length-1].up) src[src.length-1].up=true;
+    bumpMove(); checkWin(); return true;
+  }
+
+  function autoToFoundation(pile, idx){
+    const arr=pileArray(pile,idx); if(!arr.length) return false;
+    const card=arr[arr.length-1]; if(!card.up) return false;
+    for(let f=0;f<4;f++) if(foundationAccepts(f, card)){
+      commit();
+      foundations[f].push(arr.pop());
+      if(pile==='tab' && arr.length && !arr[arr.length-1].up) arr[arr.length-1].up=true;
+      bumpMove(); checkWin(); render(); return true;
+    }
+    return false;
+  }
+
+  function autoFinish(){
+    const snap=snapshot();
+    suppress=true;
+    let moved=true, any=false;
+    while(moved){
+      moved=false;
+      if(autoToFoundation('waste',0)){ moved=true; any=true; }
+      for(let c=0;c<7;c++) if(autoToFoundation('tab',c)){ moved=true; any=true; }
+    }
+    suppress=false;
+    if(any){ history.push(snap); if(history.length>300) history.shift(); updateUndoBtn(); }
+    else document.getElementById('msg').textContent='Keine Karte kann gerade abgelegt werden.';
+    render();
+  }
+
+  // ---- Hinweis: sinnvollen Zug in Prioritätsreihenfolge suchen ----
+  function firstUp(col){ for(let i=0;i<col.length;i++) if(col[i].up) return i; return -1; }
+  function findHint(){
+    // 1) Ablagestapel -> Ass-Feld
+    if(waste.length){ const c=waste[waste.length-1];
+      for(let f=0;f<4;f++) if(foundationAccepts(f,c)) return {srcPile:'waste',srcIdx:0,srcCard:waste.length-1,dstPile:'found',dstIdx:f}; }
+    // 2) oberste Spielfeldkarte -> Ass-Feld
+    for(let t=0;t<7;t++){ const col=tableau[t]; if(!col.length) continue; const c=col[col.length-1]; if(!c.up) continue;
+      for(let f=0;f<4;f++) if(foundationAccepts(f,c)) return {srcPile:'tab',srcIdx:t,srcCard:col.length-1,dstPile:'found',dstIdx:f}; }
+    // 3) Reihe verschieben, die eine verdeckte Karte aufdeckt
+    for(let t=0;t<7;t++){ const col=tableau[t]; const fu=firstUp(col); if(fu<0) continue;
+      for(let i=fu;i<col.length;i++){ const run=col.slice(i); if(!validRun(run)) continue;
+        const reveals = i>0 && !col[i-1].up;
+        if(!reveals) continue;
+        for(let d=0;d<7;d++){ if(d===t) continue; if(tableauAccepts(tableau[d],run[0]))
+          return {srcPile:'tab',srcIdx:t,srcCard:i,dstPile:'tab',dstIdx:d}; } } }
+    // 4) Ablagestapel -> Spielfeld
+    if(waste.length){ const c=waste[waste.length-1];
+      for(let d=0;d<7;d++) if(tableauAccepts(tableau[d],c)) return {srcPile:'waste',srcIdx:0,srcCard:waste.length-1,dstPile:'tab',dstIdx:d}; }
+    // 5) sonstiger gültiger Spielfeld-Zug (keine sinnlose Verlegung auf leere Spalte)
+    for(let t=0;t<7;t++){ const col=tableau[t]; const fu=firstUp(col); if(fu<0) continue;
+      for(let i=fu;i<col.length;i++){ const run=col.slice(i); if(!validRun(run)) continue;
+        const reveals = i>0 && !col[i-1].up;
+        for(let d=0;d<7;d++){ if(d===t) continue;
+          if(!tableauAccepts(tableau[d],run[0])) continue;
+          if(i===fu && !reveals && tableau[d].length===0) continue; // reine Umschichtung
+          return {srcPile:'tab',srcIdx:t,srcCard:i,dstPile:'tab',dstIdx:d}; } } }
+    // 6) nachziehen
+    if(stock.length>0 || waste.length>0) return {draw:true};
+    return null;
+  }
+  function showHint(){
+    if(won) return;
+    const h=findHint();
+    if(!h){ document.getElementById('msg').textContent='Kein Zug gefunden – evtl. festgefahren.'; return; }
+    hint=h; render();
+    if(hintTimer) clearTimeout(hintTimer);
+    hintTimer=setTimeout(()=>{ hint=null; render(); }, 1700);
+    document.getElementById('msg').textContent = h.draw ? 'Tipp: Karte vom Ziehstapel aufdecken.' : 'Tipp: markierte Karte(n) verschieben.';
+  }
+  function applyHint(){
+    if(!hint) return;
+    if(hint.draw){ document.getElementById('stockSlot').classList.add('hint'); return; }
+    document.querySelectorAll('.card').forEach(el=>{
+      if(el.dataset.pile===hint.srcPile && +el.dataset.idx===hint.srcIdx && +el.dataset.card>=hint.srcCard) el.classList.add('hint');
+    });
+    if(hint.dstPile==='found'){
+      const fs=document.querySelectorAll('#foundations .slot')[hint.dstIdx]; if(fs) fs.classList.add('hint');
+    } else if(hint.dstPile==='tab'){
+      const col=document.querySelectorAll('#cols .col')[hint.dstIdx];
+      if(col){ const cs=col.querySelectorAll('.card'); if(cs.length) cs[cs.length-1].classList.add('hint');
+               else { const s=col.querySelector('.slot'); if(s) s.classList.add('hint'); } }
+    }
+  }
+
+  function checkWin(){
+    const total=foundations.reduce((a,f)=>a+f.length,0);
+    if(total===52){ won=true; stopTimer();
+      document.getElementById('msg').textContent='🎉 Gewonnen in '+fmt(seconds)+' ('+moves+' Zügen)!';
+      document.getElementById('pname').value='';
+      document.getElementById('winForm').style.display='flex';
+    }
+  }
+
+  // ---- Interaktion ----
+  document.getElementById('table').addEventListener('click', e=>{
+    const el=e.target.closest('[data-pile]'); if(!el) return;
+    if(hint){ hint=null; if(hintTimer){clearTimeout(hintTimer);hintTimer=null;} }
+    const pile=el.dataset.pile, idx=+el.dataset.idx, cardIdx=+el.dataset.card;
+
+    if(pile==='stock'){ sel=null; draw(); render(); return; }
+
+    // Doppeltipp -> automatisch aufs Ass-Feld
+    const key=pile+idx+cardIdx, now=Date.now();
+    const isCard=cardIdx>=0;
+    if(isCard && key===lastTap.key && now-lastTap.t<350){
+      lastTap={key:'',t:0}; sel=null;
+      const arr=pileArray(pile,idx);
+      if(cardIdx===arr.length-1) autoToFoundation(pile,idx);
+      render(); return;
+    }
+    lastTap={key,t:now};
+
+    if(!sel){
+      if(isCard && canPickup(pile,idx,cardIdx)){ sel={pile,idx,card:cardIdx}; render(); }
+      return;
+    }
+    // Es liegt eine Auswahl vor
+    if(sel.pile===pile && sel.idx===idx && sel.card===cardIdx){ sel=null; render(); return; } // abwählen
+    if(pile==='found' || pile==='tab'){
+      if(tryMove(sel.pile, sel.idx, sel.card, pile, idx)){ sel=null; render(); return; }
+    }
+    // Zug ungültig -> ggf. neue Auswahl treffen
+    if(isCard && canPickup(pile,idx,cardIdx)) sel={pile,idx,card:cardIdx}; else sel=null;
+    render();
+  });
+
+  // ---- Rendering ----
+  function cardEl(card, pile, idx, cardIdx, topPx){
+    const d=document.createElement('div');
+    d.className='card'+(card.up?'':' down')+(isRed(card.suit)?' red':'');
+    d.style.top=topPx+'px';
+    d.dataset.pile=pile; d.dataset.idx=idx; d.dataset.card=cardIdx;
+    if(sel && sel.pile===pile && sel.idx===idx && cardIdx>=sel.card) d.classList.add('sel');
+    if(card.up){
+      d.innerHTML='<span class="tl">'+RANKS[card.rank]+SUITS[card.suit]+'</span><span class="ctr">'+SUITS[card.suit]+'</span>';
+    }
+    return d;
+  }
+
+  function render(){
+    // Stock
+    const ss=document.getElementById('stockSlot');
+    ss.innerHTML = stock.length ? '' : '↻';
+    ss.classList.toggle('top-card', stock.length>0);
+    if(stock.length){ const b=document.createElement('div'); b.className='card down'; b.style.top='0'; b.dataset.pile='stock'; b.dataset.idx='0'; b.dataset.card='-1'; ss.appendChild(b); }
+
+    // Waste (letzte bis zu 3 gefächert, nur oberste spielbar)
+    const ws=document.getElementById('wasteSlot'); ws.innerHTML='';
+    const showN=Math.min(3, waste.length);
+    for(let i=0;i<showN;i++){
+      const wi=waste.length-showN+i;
+      const c=waste[wi];
+      const d=cardEl(c,'waste',0,wi,0);
+      d.style.left=(i*12)+'px';
+      if(wi!==waste.length-1){ d.classList.remove('sel'); }
+      ws.appendChild(d);
+    }
+    ws.style.width=(44+(showN>0?(showN-1)*12:0))+'px';
+
+    // Foundations
+    const fc=document.getElementById('foundations'); fc.innerHTML='';
+    for(let f=0;f<4;f++){
+      const slot=document.createElement('div'); slot.className='slot'; slot.dataset.pile='found'; slot.dataset.idx=f; slot.dataset.card=(foundations[f].length-1);
+      if(foundations[f].length){ slot.appendChild(cardEl(foundations[f][foundations[f].length-1],'found',f,foundations[f].length-1,0)); }
+      else { slot.style.display='flex'; slot.style.alignItems='center'; slot.style.justifyContent='center'; slot.style.fontSize='24px'; slot.style.opacity='0.5';
+             slot.style.color = isRed(FOUND_SUIT[f]) ? 'var(--red)' : 'var(--fg)'; slot.textContent=SUITS[FOUND_SUIT[f]]; }
+      fc.appendChild(slot);
+    }
+
+    // Tableau
+    const cols=document.getElementById('cols'); cols.innerHTML='';
+    for(let c=0;c<7;c++){
+      const col=document.createElement('div'); col.className='col';
+      col.dataset.pile='tab'; col.dataset.idx=c; col.dataset.card='-1';
+      if(tableau[c].length===0){
+        const s=document.createElement('div'); s.className='slot'; s.dataset.pile='tab'; s.dataset.idx=c; s.dataset.card='-1';
+        col.appendChild(s); col.style.minHeight=CH+'px';
+      } else {
+        let y=0;
+        tableau[c].forEach((card,j)=>{
+          col.appendChild(cardEl(card,'tab',c,j,y));
+          if(j<tableau[c].length-1) y += card.up?FO:FD;
+        });
+        col.style.minHeight=(y+CH)+'px';
+      }
+      cols.appendChild(col);
+    }
+    applyHint();
+  }
+
+  // ---- Bestenliste ----
+  function loadScores(){ const raw=store.get('klondike_'+drawMode); if(!raw)return[]; try{return JSON.parse(raw);}catch(e){return[];} }
+  function saveScore(){
+    const name=document.getElementById('pname').value.trim()||'Anonym';
+    const entry={ id:Date.now()+'-'+Math.random().toString(36).slice(2,7), name, time:seconds, moves, date:new Date().toISOString().slice(0,10) };
+    const list=loadScores(); list.push(entry);
+    list.sort((a,b)=>a.time-b.time || a.moves-b.moves);
+    const rank=list.findIndex(e=>e.id===entry.id)+1;
+    const total=list.length;
+    store.set('klondike_'+drawMode, JSON.stringify(list.slice(0,10)));
+    lastEntryId=entry.id;
+    document.getElementById('winForm').style.display='none';
+    showPlacard(rank,total);
+    renderLB();
+  }
+  function showPlacard(rank,total){
+    const p=document.getElementById('placard');
+    let head;
+    if(rank===1) head='🥇 Platz 1 – neue Bestzeit!';
+    else if(rank===2) head='🥈 Platz 2!';
+    else if(rank===3) head='🥉 Platz 3!';
+    else if(rank<=10) head='🏅 Platz '+rank+' von '+total;
+    else head='Platz '+rank+' – knapp an den Top 10 vorbei';
+    const sub='Zeit '+fmt(seconds)+' · '+moves+' Züge · '+drawMode+' Karte'+(drawMode>1?'n':'')+' ziehen';
+    p.innerHTML='<span class="big">'+head+'</span>'+sub;
+    p.style.display='block';
+  }
+  function esc(s){ return s.replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+  function renderLB(){
+    const list=loadScores();
+    const medal=['🥇','🥈','🥉'];
+    let html='<h3 style="margin:6px 0;">Rangliste – '+drawMode+' Karte'+(drawMode>1?'n':'')+'</h3>';
+    if(!list.length){ html+='<p style="font-size:13px;">Noch keine gewonnenen Spiele – die schnellsten Siege landen hier.</p>'; }
+    else{ html+='<table><tr><th>#</th><th>Name</th><th>Zeit</th><th>Züge</th><th>Datum</th></tr>';
+      list.forEach((s,i)=>html+='<tr'+(s.id&&s.id===lastEntryId?' class="me"':'')+'><td>'+(medal[i]||(i+1))+'</td><td>'+esc(s.name)+'</td><td>'+fmt(s.time)+'</td><td>'+s.moves+'</td><td>'+s.date+'</td></tr>');
+      html+='</table>'; }
+    document.getElementById('lb').innerHTML=html;
+  }
+  document.getElementById('drawMode').addEventListener('change', renderLB);
+
+  newGame();
+</script>
+</body>
+</html>

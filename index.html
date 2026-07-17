@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Spielekiste</title>
+<meta name="theme-color" content="#241b3a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Spielekiste">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiMyYjIxNTAiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMxNzEyMjYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjExNiIgZmlsbD0idXJsKCNnKSIvPjxjaXJjbGUgY3g9IjE1MiIgY3k9IjMwMCIgcj0iNTQiIGZpbGw9IiNmNWE5N2YiLz48Y2lyY2xlIGN4PSIyNTYiIGN5PSIzMDAiIHI9IjU0IiBmaWxsPSIjODJkNGI0Ii8+PGNpcmNsZSBjeD0iMzYwIiBjeT0iMzAwIiByPSI1NCIgZmlsbD0iI2VjOGZiMCIvPjxyZWN0IHg9IjE1MCIgeT0iMTUwIiB3aWR0aD0iMjEyIiBoZWlnaHQ9IjQ2IiByeD0iMjMiIGZpbGw9IiNmM2VkZTIiIG9wYWNpdHk9IjAuOSIvPjwvc3ZnPgo=">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiMyYjIxNTAiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMxNzEyMjYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjExNiIgZmlsbD0idXJsKCNnKSIvPjxjaXJjbGUgY3g9IjE1MiIgY3k9IjMwMCIgcj0iNTQiIGZpbGw9IiNmNWE5N2YiLz48Y2lyY2xlIGN4PSIyNTYiIGN5PSIzMDAiIHI9IjU0IiBmaWxsPSIjODJkNGI0Ii8+PGNpcmNsZSBjeD0iMzYwIiBjeT0iMzAwIiByPSI1NCIgZmlsbD0iI2VjOGZiMCIvPjxyZWN0IHg9IjE1MCIgeT0iMTUwIiB3aWR0aD0iMjEyIiBoZWlnaHQ9IjQ2IiByeD0iMjMiIGZpbGw9IiNmM2VkZTIiIG9wYWNpdHk9IjAuOSIvPjwvc3ZnPgo=">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    color-scheme: dark;
+    --bg1:#241b3a; --bg2:#150f24; --surface:#312650; --surface2:#3b2f5e; --line:#4a3d70;
+    --text:#f3ede2; --muted:#b6abd4;
+    --apricot:#f5a97f; --mint:#82d4b4; --rose:#ec8fb0; --sky:#8bb8f0; --gold:#f2cf72; --violet:#b79cf0; --lime:#bfe08a;
+    --display:'Fredoka', system-ui, sans-serif;
+    --body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{
+    margin:0; min-height:100vh; font-family:var(--body); color:var(--text);
+    background:radial-gradient(120% 80% at 50% -10%, #2f2456 0%, var(--bg1) 45%, var(--bg2) 100%);
+    padding:28px 18px 40px; padding-top:max(28px, env(safe-area-inset-top));
+  }
+  .wrap{ max-width:640px; margin:0 auto; }
+
+  /* Kopf */
+  .hero{ text-align:center; margin-bottom:30px; }
+  .dots{ display:flex; gap:8px; justify-content:center; margin-bottom:14px; }
+  .dots i{ width:11px; height:11px; border-radius:50%; display:block; }
+  .wordmark{
+    font-family:var(--display); font-weight:700; font-size:clamp(38px,11vw,58px);
+    line-height:1; letter-spacing:-.5px; margin:0;
+    background:linear-gradient(95deg, var(--apricot), var(--rose) 55%, var(--violet));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .subtitle{ color:var(--muted); font-size:15px; margin:12px 0 0; }
+
+  /* Abschnitts-Label */
+  .eyebrow{
+    font-family:var(--display); font-weight:600; font-size:12.5px; letter-spacing:2.5px;
+    text-transform:uppercase; color:var(--muted); margin:26px 4px 12px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .eyebrow::after{ content:""; flex:1; height:1px; background:var(--line); }
+
+  /* Kachel-Raster */
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:13px; }
+  .cart{
+    --c:var(--mint);
+    display:block; text-decoration:none; color:inherit;
+    background:linear-gradient(180deg, var(--surface2), var(--surface));
+    border:1px solid var(--line); border-radius:18px; padding:15px 15px 16px;
+    position:relative; overflow:hidden; isolation:isolate;
+    transition:transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+  }
+  .cart::before{ content:""; position:absolute; inset:0 0 auto 0; height:4px; background:var(--c); opacity:.9; }
+  .glyph{
+    width:46px; height:46px; border-radius:13px; display:flex; align-items:center; justify-content:center;
+    font-size:24px; margin-bottom:12px;
+    background:color-mix(in srgb, var(--c) 22%, transparent);
+    border:1px solid color-mix(in srgb, var(--c) 45%, transparent);
+  }
+  .cart h3{ font-family:var(--display); font-weight:600; font-size:17px; margin:0 0 4px; }
+  .cart p{ margin:0; font-size:12.5px; line-height:1.35; color:var(--muted); }
+  .cart:active{ transform:translateY(2px) scale(.985); }
+  @media (hover:hover){ .cart:hover{ transform:translateY(-3px); border-color:var(--c); box-shadow:0 10px 24px rgba(0,0,0,.35); } }
+  .cart:focus-visible{ outline:3px solid var(--c); outline-offset:2px; }
+
+  .c-apricot{--c:var(--apricot);} .c-mint{--c:var(--mint);} .c-rose{--c:var(--rose);}
+  .c-sky{--c:var(--sky);} .c-gold{--c:var(--gold);} .c-violet{--c:var(--violet);} .c-lime{--c:var(--lime);}
+
+  /* Hinweis + Fuß */
+  .tip{
+    margin-top:24px; background:rgba(255,255,255,.04); border:1px solid var(--line);
+    border-radius:14px; padding:13px 15px; font-size:13px; color:var(--muted); line-height:1.45;
+  }
+  .tip b{ color:var(--text); font-weight:600; }
+  footer{ text-align:center; color:var(--muted); font-size:12px; margin-top:26px; opacity:.8; }
+
+  @media (prefers-reduced-motion: no-preference){
+    .hero,.eyebrow,.cart{ animation:rise .5s ease both; }
+    .cart:nth-child(2){ animation-delay:.04s; } .cart:nth-child(3){ animation-delay:.08s; }
+    .cart:nth-child(4){ animation-delay:.12s; }
+    @keyframes rise{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:none; } }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <div class="dots"><i style="background:var(--apricot)"></i><i style="background:var(--mint)"></i><i style="background:var(--rose)"></i></div>
+      <h1 class="wordmark">Spielekiste</h1>
+      <p class="subtitle">Ein paar kleine Spiele – tipp eins an.</p>
+    </header>
+
+    <div class="grid">
+      <a class="cart c-rose" href="minesweeper.html">
+        <div class="glyph">💣</div><h3>Minesweeper</h3><p>Finde alle Minen, ohne draufzutreten.</p>
+      </a>
+      <a class="cart c-sky" href="sudoku.html">
+        <div class="glyph">🔢</div><h3>Sudoku</h3><p>Zahlenrätsel mit vier Schwierigkeiten.</p>
+      </a>
+      <a class="cart c-gold" href="solitaire.html">
+        <div class="glyph">🃏</div><h3>Solitär</h3><p>Klondike-Patience mit Rangliste.</p>
+      </a>
+    </div>
+
+    <div class="tip">
+      <b>Als App ablegen:</b> in Chrome oben auf das Menü (⋮) tippen und <b>Zum Startbildschirm hinzufügen</b> wählen. Danach startet die Spielekiste mit eigenem Icon im Vollbild.
+    </div>
+
+    <footer>Mit Liebe zusammengestellt · viel Spaß beim Spielen</footer>
+  </div>
+</body>
+</html>

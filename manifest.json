@@ -1,0 +1,13 @@
+{
+  "name": "Spielekiste",
+  "short_name": "Spielekiste",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#171226",
+  "theme_color": "#241b3a",
+  "icons": [
+    { "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiMyYjIxNTAiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMxNzEyMjYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjExNiIgZmlsbD0idXJsKCNnKSIvPjxjaXJjbGUgY3g9IjE1MiIgY3k9IjMwMCIgcj0iNTQiIGZpbGw9IiNmNWE5N2YiLz48Y2lyY2xlIGN4PSIyNTYiIGN5PSIzMDAiIHI9IjU0IiBmaWxsPSIjODJkNGI0Ii8+PGNpcmNsZSBjeD0iMzYwIiBjeT0iMzAwIiByPSI1NCIgZmlsbD0iI2VjOGZiMCIvPjxyZWN0IHg9IjE1MCIgeT0iMTUwIiB3aWR0aD0iMjEyIiBoZWlnaHQ9IjQ2IiByeD0iMjMiIGZpbGw9IiNmM2VkZTIiIG9wYWNpdHk9IjAuOSIvPjwvc3ZnPgo=", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

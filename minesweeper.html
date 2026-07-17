@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minesweeper Light</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 20px;
+    }
+    #controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    #panel {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      margin-bottom: 10px;
+      font-weight: bold;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .digital {
+      background: #222;
+      font-family: monospace;
+      font-size: 20px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      min-width: 60px;
+      text-align: center;
+    }
+    #minecounter { color: #e74c3c; }
+    #timer { color: #2ecc71; }
+    select, #flagBtn, #controls button {
+      padding: 6px 12px;
+      border: 2px solid #999;
+      border-radius: 6px;
+      background: #eee;
+      cursor: pointer;
+      font-size: 15px;
+    }
+    #flagBtn.active {
+      background: #f1c40f;
+      border-color: #b8930d;
+    }
+    #boardWrap {
+      max-width: 100%;
+      overflow: auto;
+    }
+    #board {
+      display: grid;
+      gap: 2px;
+    }
+    .cell {
+      width: 30px;
+      height: 30px;
+      background: #ddd;
+      border: 1px solid #999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      user-select: none;
+      font-size: 16px;
+      font-weight: bold;
+      box-sizing: border-box;
+    }
+    .revealed { background: #f5f5f5; cursor: default; }
+    .mine { background: #e74c3c; color: #fff; }
+    .flag { background: #f1c40f; }
+    #status { margin-bottom: 10px; font-weight: bold; }
+    #winForm {
+      display: none;
+      margin: 10px 0;
+      gap: 8px;
+      align-items: center;
+    }
+    #winForm input {
+      padding: 6px 8px;
+      font-size: 15px;
+      border: 2px solid #999;
+      border-radius: 6px;
+    }
+    #leaderboard {
+      margin-top: 20px;
+      min-width: 280px;
+    }
+    #leaderboard table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    #leaderboard th, #leaderboard td {
+      border: 1px solid #ccc;
+      padding: 4px 8px;
+      text-align: left;
+      font-size: 14px;
+    }
+    #leaderboard th { background: #f0f0f0; }
+    .num1 { color:#0000ff; } .num2 { color:#008000; } .num3 { color:#ff0000; }
+    .num4 { color:#000080; } .num5 { color:#800000; } .num6 { color:#008080; }
+    .num7 { color:#000000; } .num8 { color:#808080; }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <label>Schwierigkeit:
+      <select id="difficulty" onchange="changeDifficulty()">
+        <option value="leicht">Leicht (9×9, 10)</option>
+        <option value="mittel">Mittel (16×16, 40)</option>
+        <option value="schwer">Schwer (30×16, 99)</option>
+      </select>
+    </label>
+    <button onclick="initGame()">Neues Spiel</button>
+    <button id="flagBtn" onclick="toggleFlagMode()">🚩 Flaggen-Modus: aus</button>
+  </div>
+
+  <div id="panel">
+    <div>Minen: <span id="minecounter" class="digital">10</span></div>
+    <div>Zeit: <span id="timer" class="digital">0:00</span></div>
+  </div>
+
+  <div id="status">Klick auf ein Feld, um zu starten.</div>
+
+  <div id="winForm">
+    <label>Dein Name: <input id="playerName" type="text" maxlength="20" placeholder="Anonym"></label>
+    <button onclick="saveScore()">Speichern</button>
+  </div>
+
+  <div id="boardWrap"><div id="board"></div></div>
+
+  <div id="leaderboard"></div>
+
+  <script>
+    // Schwierigkeitsgrade: [Zeilen, Spalten, Minen]
+    const DIFF = {
+      leicht: { rows: 9,  cols: 9,  mines: 10, label: 'Leicht' },
+      mittel: { rows: 16, cols: 16, mines: 40, label: 'Mittel' },
+      schwer: { rows: 16, cols: 30, mines: 99, label: 'Schwer' }
+    };
+
+    let rows, cols, mineCount, diffKey;
+    let board = [];
+    let gameOver = false;
+    let flagMode = false;
+    let started = false;
+    let seconds = 0;
+    let timerId = null;
+    let pendingScore = null;
+
+    // Speicher mit Fallback: localStorage, sonst nur Sitzung
+    const memStore = {};
+    const store = {
+      get(k){ try { return localStorage.getItem(k); } catch(e){ return (k in memStore) ? memStore[k] : null; } },
+      set(k,v){ try { localStorage.setItem(k,v); } catch(e){ memStore[k]=v; } }
+    };
+
+    function currentDiff() { return DIFF[diffKey]; }
+
+    function changeDifficulty() {
+      diffKey = document.getElementById('difficulty').value;
+      initGame();
+    }
+
+    function toggleFlagMode() {
+      flagMode = !flagMode;
+      const btn = document.getElementById('flagBtn');
+      btn.textContent = '🚩 Flaggen-Modus: ' + (flagMode ? 'an' : 'aus');
+      btn.classList.toggle('active', flagMode);
+    }
+
+    function fmtTime(s) {
+      const m = Math.floor(s / 60);
+      const sec = s % 60;
+      return m + ':' + String(sec).padStart(2, '0');
+    }
+
+    function startTimer() {
+      if (timerId) return;
+      timerId = setInterval(function () {
+        seconds++;
+        document.getElementById('timer').textContent = fmtTime(seconds);
+      }, 1000);
+    }
+
+    function stopTimer() {
+      if (timerId) { clearInterval(timerId); timerId = null; }
+    }
+
+    function updateCounter() {
+      let flags = 0;
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++)
+          if (board[r][c].flag) flags++;
+      document.getElementById('minecounter').textContent = mineCount - flags;
+    }
+
+    function initGame() {
+      if (!diffKey) diffKey = document.getElementById('difficulty').value;
+      const d = currentDiff();
+      rows = d.rows; cols = d.cols; mineCount = d.mines;
+
+      stopTimer();
+      seconds = 0;
+      started = false;
+      gameOver = false;
+      pendingScore = null;
+      document.getElementById('timer').textContent = '0:00';
+      document.getElementById('status').textContent = 'Viel Spaß!';
+      document.getElementById('winForm').style.display = 'none';
+
+      board = [];
+      for (let r = 0; r < rows; r++) {
+        const row = [];
+        for (let c = 0; c < cols; c++) {
+          row.push({ mine: false, revealed: false, flag: false, adjacent: 0 });
+        }
+        board.push(row);
+      }
+      // Minen werden erst beim ersten Klick gesetzt (erster Klick ist nie eine Mine)
+      renderBoard();
+      updateCounter();
+      renderLeaderboard();
+    }
+
+    function placeMines(safeR, safeC) {
+      let placed = 0;
+      while (placed < mineCount) {
+        const r = Math.floor(Math.random() * rows);
+        const c = Math.floor(Math.random() * cols);
+        if (board[r][c].mine) continue;
+        if (r === safeR && c === safeC) continue; // erstes Feld sicher
+        board[r][c].mine = true;
+        placed++;
+      }
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++)
+          if (!board[r][c].mine) board[r][c].adjacent = countAdjacentMines(r, c);
+    }
+
+    function countAdjacentMines(r, c) {
+      let count = 0;
+      for (let dr = -1; dr <= 1; dr++)
+        for (let dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && board[nr][nc].mine) count++;
+        }
+      return count;
+    }
+
+    function renderBoard() {
+      const boardDiv = document.getElementById('board');
+      boardDiv.innerHTML = '';
+      boardDiv.style.gridTemplateColumns = `repeat(${cols}, 30px)`;
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cellData = board[r][c];
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+
+          if (cellData.revealed) {
+            cell.classList.add('revealed');
+            if (cellData.mine) {
+              cell.classList.add('mine');
+              cell.textContent = '💣';
+            } else if (cellData.adjacent > 0) {
+              cell.textContent = cellData.adjacent;
+              cell.classList.add('num' + cellData.adjacent);
+            }
+          } else if (cellData.flag) {
+            cell.classList.add('flag');
+            cell.textContent = '🚩';
+          }
+
+          cell.addEventListener('click', onLeftClick);
+          cell.addEventListener('contextmenu', onRightClick);
+
+          let pressTimer = null;
+          cell.addEventListener('touchstart', function (ev) {
+            pressTimer = setTimeout(function () {
+              pressTimer = null;
+              toggleFlagAt(r, c);
+            }, 400);
+          }, { passive: true });
+          cell.addEventListener('touchend', function () {
+            if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+          });
+
+          boardDiv.appendChild(cell);
+        }
+      }
+    }
+
+    function toggleFlagAt(r, c) {
+      if (gameOver) return;
+      const cell = board[r][c];
+      if (cell.revealed) return;
+      cell.flag = !cell.flag;
+      renderBoard();
+      updateCounter();
+    }
+
+    function onLeftClick(e) {
+      e.preventDefault();
+      if (gameOver) return;
+
+      const r = parseInt(e.currentTarget.dataset.row);
+      const c = parseInt(e.currentTarget.dataset.col);
+      const cell = board[r][c];
+
+      if (flagMode) { toggleFlagAt(r, c); return; }
+      if (cell.flag || cell.revealed) return;
+
+      if (!started) {
+        placeMines(r, c);
+        started = true;
+        startTimer();
+      }
+
+      cell.revealed = true;
+
+      if (cell.mine) {
+        gameOver = true;
+        stopTimer();
+        revealAllMines();
+        document.getElementById('status').textContent = 'Boom! Spiel vorbei.';
+      } else {
+        if (cell.adjacent === 0) revealEmptyNeighbors(r, c);
+        checkWin();
+      }
+      renderBoard();
+    }
+
+    function onRightClick(e) {
+      e.preventDefault();
+      if (gameOver) return;
+      const r = parseInt(e.currentTarget.dataset.row);
+      const c = parseInt(e.currentTarget.dataset.col);
+      toggleFlagAt(r, c);
+    }
+
+    function revealAllMines() {
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++)
+          if (board[r][c].mine) board[r][c].revealed = true;
+    }
+
+    function revealEmptyNeighbors(r, c) {
+      for (let dr = -1; dr <= 1; dr++)
+        for (let dc = -1; dc <= 1; dc++) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+            const neighbor = board[nr][nc];
+            if (!neighbor.revealed && !neighbor.mine) {
+              neighbor.revealed = true;
+              if (neighbor.adjacent === 0) revealEmptyNeighbors(nr, nc);
+            }
+          }
+        }
+    }
+
+    function checkWin() {
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++) {
+          const cell = board[r][c];
+          if (!cell.mine && !cell.revealed) return;
+        }
+      // Gewonnen
+      gameOver = true;
+      stopTimer();
+      document.getElementById('status').textContent =
+        'Glückwunsch, gewonnen in ' + fmtTime(seconds) + '!';
+      pendingScore = { diff: diffKey, time: seconds };
+      document.getElementById('playerName').value = '';
+      document.getElementById('winForm').style.display = 'flex';
+    }
+
+    function loadScores(diff) {
+      const raw = store.get('ms_scores_' + diff);
+      if (!raw) return [];
+      try { return JSON.parse(raw); } catch (e) { return []; }
+    }
+
+    function saveScore() {
+      if (!pendingScore) return;
+      let name = document.getElementById('playerName').value.trim();
+      if (!name) name = 'Anonym';
+      const list = loadScores(pendingScore.diff);
+      list.push({
+        name: name,
+        time: pendingScore.time,
+        date: new Date().toISOString().slice(0, 10)
+      });
+      list.sort((a, b) => a.time - b.time);
+      const top = list.slice(0, 10);
+      store.set('ms_scores_' + pendingScore.diff, JSON.stringify(top));
+      pendingScore = null;
+      document.getElementById('winForm').style.display = 'none';
+      renderLeaderboard();
+    }
+
+    function renderLeaderboard() {
+      const list = loadScores(diffKey);
+      const d = currentDiff();
+      let html = '<h3>Bestenliste – ' + d.label + '</h3>';
+      if (list.length === 0) {
+        html += '<p style="font-size:14px;color:#666;">Noch keine Zeiten. Sei die/der Erste!</p>';
+      } else {
+        html += '<table><tr><th>#</th><th>Name</th><th>Zeit</th><th>Datum</th></tr>';
+        list.forEach((s, i) => {
+          html += '<tr><td>' + (i + 1) + '</td><td>' +
+            escapeHtml(s.name) + '</td><td>' + fmtTime(s.time) + '</td><td>' +
+            s.date + '</td></tr>';
+        });
+        html += '</table>';
+      }
+      document.getElementById('leaderboard').innerHTML = html;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, ch => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[ch]));
+    }
+
+    initGame();
+  </script>
+</body>
+</html>
