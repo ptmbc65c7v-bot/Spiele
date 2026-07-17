@@ -39,6 +39,7 @@
   }
   .card .tl { position:absolute; top:2px; left:3px; font-size:12px; line-height:1; }
   .card .ctr{ position:absolute; top:50%; left:50%; transform:translate(-50%,-45%); font-size:20px; }
+  .card .ctr.court{ font-size:26px; }
   .card.red { color:var(--red); }
   .card.down { background:repeating-linear-gradient(45deg,var(--back1),var(--back1) 5px,var(--back2) 5px,var(--back2) 10px); border-color:var(--back2); }
   .card.sel { outline:3px solid var(--sel); outline-offset:-1px; z-index:50; }
@@ -79,8 +80,8 @@
   <div id="table">
     <div id="topRow">
       <div class="group">
-        <div class="slot" id="stockSlot" data-pile="stock" data-idx="0" data-card="-1"></div>
         <div class="slot" id="wasteSlot" data-pile="waste" data-idx="0" data-card="-1"></div>
+        <div class="slot" id="stockSlot" data-pile="stock" data-idx="0" data-card="-1"></div>
       </div>
       <div class="group" id="foundations"></div>
     </div>
@@ -350,7 +351,14 @@
     d.dataset.pile=pile; d.dataset.idx=idx; d.dataset.card=cardIdx;
     if(sel && sel.pile===pile && sel.idx===idx && cardIdx>=sel.card) d.classList.add('sel');
     if(card.up){
-      d.innerHTML='<span class="tl">'+RANKS[card.rank]+SUITS[card.suit]+'</span><span class="ctr">'+SUITS[card.suit]+'</span>';
+      var center;
+      if(card.rank>=11){
+        var fig={11:'♞',12:'♛',13:'♚'}[card.rank];
+        center='<span class="ctr court">'+fig+'</span>';
+      } else {
+        center='<span class="ctr">'+SUITS[card.suit]+'</span>';
+      }
+      d.innerHTML='<span class="tl">'+RANKS[card.rank]+SUITS[card.suit]+'</span>'+center;
     }
     return d;
   }
