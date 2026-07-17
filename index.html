@@ -86,6 +86,23 @@
   .tip b{ color:var(--text); font-weight:600; }
   footer{ text-align:center; color:var(--muted); font-size:12px; margin-top:26px; opacity:.8; }
 
+  /* Größere Bildschirme (Tablet, Desktop) */
+  @media (min-width:700px){
+    body{ padding:48px 32px 64px; }
+    .wrap{ max-width:900px; }
+    .hero{ margin-bottom:40px; }
+    .wordmark{ font-size:74px; }
+    .subtitle{ font-size:19px; margin-top:16px; }
+    .grid{ grid-template-columns:repeat(3, 1fr); gap:22px; }
+    .cart{ padding:26px 24px 28px; border-radius:22px; }
+    .cart::before{ height:5px; }
+    .glyph{ width:64px; height:64px; border-radius:18px; font-size:34px; margin-bottom:18px; }
+    .cart h3{ font-size:23px; }
+    .cart p{ font-size:15px; }
+    .tip{ font-size:15px; padding:18px 22px; margin-top:32px; }
+    footer{ font-size:14px; margin-top:34px; }
+  }
+
   @media (prefers-reduced-motion: no-preference){
     .hero,.eyebrow,.cart{ animation:rise .5s ease both; }
     .cart:nth-child(2){ animation-delay:.04s; } .cart:nth-child(3){ animation-delay:.08s; }
