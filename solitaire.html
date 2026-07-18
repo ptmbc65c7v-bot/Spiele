@@ -5,11 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Solitär (Klondike)</title>
 <style>
-  @media (min-width:768px){ body{ zoom:1.4; } }
-  @media (min-width:1024px){ body{ zoom:1.75; } }
   :root{
     color-scheme: light dark;
     --felt:#2e7d4f; --fg:#fff; --panel:#ffffff; --panel-fg:#222; --panel-border:#cfcfcf;
+    --cw:44px; --ch:62px;
     --slot:rgba(255,255,255,0.18); --slotb:rgba(255,255,255,0.35);
     --card:#fff; --cardb:#333; --black:#1a1a1a; --red:#d33; --back1:#3f6fd6; --back2:#28499a;
     --sel:#f1c40f;
@@ -26,20 +25,20 @@
   .btn, select { padding:6px 10px; border:1px solid var(--panel-border); border-radius:6px;
                  background:var(--panel); color:var(--panel-fg); cursor:pointer; font-size:13px; }
   #stat { display:flex; gap:14px; font-weight:bold; margin-bottom:8px; font-size:14px; }
-  #table { position:relative; width:100%; max-width:340px; }
+  #table { position:relative; width:100%; max-width:880px; margin:0 auto; }
   #topRow { display:flex; justify-content:space-between; margin-bottom:10px; }
   .group { display:flex; gap:4px; }
-  .slot { width:44px; height:62px; border:1px dashed var(--slotb); border-radius:6px; background:var(--slot); position:relative; }
+  .slot { width:var(--cw); height:var(--ch); border:1px dashed var(--slotb); border-radius:calc(var(--cw)*0.14); background:var(--slot); position:relative; }
   .cols { display:flex; gap:4px; }
-  .col { width:44px; position:relative; min-height:62px; }
+  .col { width:var(--cw); position:relative; min-height:var(--ch); }
   .card {
-    width:44px; height:62px; border-radius:6px; position:absolute; left:0;
+    width:var(--cw); height:var(--ch); border-radius:calc(var(--cw)*0.14); position:absolute; left:0;
     border:1px solid var(--cardb); background:var(--card); color:var(--black);
     font-weight:bold; cursor:pointer; overflow:hidden;
   }
-  .card .tl { position:absolute; top:2px; left:3px; font-size:12px; line-height:1; }
-  .card .ctr{ position:absolute; top:50%; left:50%; transform:translate(-50%,-45%); font-size:20px; }
-  .card .ctr.court{ font-size:26px; }
+  .card .tl { position:absolute; top:calc(var(--cw)*0.05); left:calc(var(--cw)*0.08); font-size:calc(var(--cw)*0.28); line-height:1; }
+  .card .ctr{ position:absolute; top:50%; left:50%; transform:translate(-50%,-45%); font-size:calc(var(--cw)*0.46); }
+  .card .ctr.court{ font-size:calc(var(--cw)*0.62); }
   .card.red { color:var(--red); }
   .card.down { background:repeating-linear-gradient(45deg,var(--back1),var(--back1) 5px,var(--back2) 5px,var(--back2) 10px); border-color:var(--back2); }
   .card.sel { outline:3px solid var(--sel); outline-offset:-1px; z-index:50; }
@@ -47,7 +46,7 @@
   .card.hint, .slot.hint { animation:hintpulse 0.7s ease-in-out 2; outline:2px solid var(--sel); z-index:60; }
   .btn:disabled { opacity:0.4; cursor:default; }
   .slot.top-card { border-style:solid; }
-  #stockSlot { display:flex; align-items:center; justify-content:center; font-size:22px; color:var(--fg); }
+  #stockSlot { display:flex; align-items:center; justify-content:center; font-size:calc(var(--cw)*0.5); color:var(--fg); }
   #msg { margin-top:10px; font-weight:bold; min-height:20px; text-align:center; }
   #lb { margin-top:14px; width:100%; max-width:340px; }
   #lb table { border-collapse:collapse; width:100%; background:var(--panel); color:var(--panel-fg); border-radius:6px; overflow:hidden; }
@@ -98,7 +97,17 @@
   const FOUND_SUIT=[0,1,2,3];               // feste Farbe je Ablage: ♠ ♥ ♦ ♣
   const RANKS=['','A','2','3','4','5','6','7','8','9','10','J','Q','K'];
   const isRed = s => s===1||s===2;
-  const FO=20, FD=13, CH=62;
+  let CW=44, CH=62, FO=20, FD=13, WFAN=12;
+  function layout(){
+    const gap=4, maxW=880, side=24;
+    const avail=Math.min(window.innerWidth - side, maxW);
+    CW=Math.max(38, Math.min(Math.floor((avail - gap*6)/7), 118));
+    CH=Math.round(CW*1.4);
+    FO=Math.round(CH*0.34); FD=Math.round(CH*0.22); WFAN=Math.round(CW*0.28);
+    const rs=document.documentElement.style;
+    rs.setProperty('--cw', CW+'px'); rs.setProperty('--ch', CH+'px');
+    const t=document.getElementById('table'); if(t) t.style.maxWidth=(CW*7 + gap*6)+'px';
+  }
 
   let stock, waste, foundations, tableau;
   let sel=null;                 // {pile, idx, card}
@@ -132,6 +141,7 @@
   }
 
   function newGame(){
+    layout();
     drawMode=+document.getElementById('drawMode').value;
     stopTimer(); seconds=0; started=false; won=false; moves=0; sel=null;
     history=[]; suppress=false; hint=null; if(hintTimer){clearTimeout(hintTimer);hintTimer=null;}
@@ -231,6 +241,27 @@
     return false;
   }
 
+  // Doppeltipp: Karte(n) auf den nächsten passenden Platz legen
+  function autoMove(pile, idx, cardIdx){
+    if(pile==='found') return false;                 // vom Ass-Feld nichts zurückholen
+    if(!canPickup(pile, idx, cardIdx)) return false;
+    const run=pileArray(pile, idx).slice(cardIdx);
+    // 1) Ass-Feld (nur einzelne oberste Karte)
+    if(run.length===1){
+      for(let f=0; f<4; f++)
+        if(foundationAccepts(f, run[0])) return tryMove(pile, idx, cardIdx, 'found', f);
+    }
+    // 2) Spielfeld: zuerst passende belegte Spalte, sonst leere Spalte (für Könige)
+    let emptyTarget=-1;
+    for(let d=0; d<7; d++){
+      if(pile==='tab' && d===idx) continue;
+      if(tableau[d].length===0){ if(emptyTarget<0 && run[0].rank===13) emptyTarget=d; continue; }
+      if(tableauAccepts(tableau[d], run[0])) return tryMove(pile, idx, cardIdx, 'tab', d);
+    }
+    if(emptyTarget>=0) return tryMove(pile, idx, cardIdx, 'tab', emptyTarget);
+    return false;
+  }
+
   function autoFinish(){
     const snap=snapshot();
     suppress=true;
@@ -318,13 +349,12 @@
 
     if(pile==='stock'){ sel=null; draw(); render(); return; }
 
-    // Doppeltipp -> automatisch aufs Ass-Feld
+    // Doppeltipp -> automatisch auf den nächsten passenden Platz
     const key=pile+idx+cardIdx, now=Date.now();
     const isCard=cardIdx>=0;
     if(isCard && key===lastTap.key && now-lastTap.t<350){
       lastTap={key:'',t:0}; sel=null;
-      const arr=pileArray(pile,idx);
-      if(cardIdx===arr.length-1) autoToFoundation(pile,idx);
+      autoMove(pile,idx,cardIdx);
       render(); return;
     }
     lastTap={key,t:now};
@@ -377,11 +407,11 @@
       const wi=waste.length-showN+i;
       const c=waste[wi];
       const d=cardEl(c,'waste',0,wi,0);
-      d.style.left=(i*12)+'px';
+      d.style.left=(i*WFAN)+'px';
       if(wi!==waste.length-1){ d.classList.remove('sel'); }
       ws.appendChild(d);
     }
-    ws.style.width=(44+(showN>0?(showN-1)*12:0))+'px';
+    ws.style.width=(CW+(showN>0?(showN-1)*WFAN:0))+'px';
 
     // Foundations
     const fc=document.getElementById('foundations'); fc.innerHTML='';
@@ -453,6 +483,7 @@
     document.getElementById('lb').innerHTML=html;
   }
   document.getElementById('drawMode').addEventListener('change', renderLB);
+  window.addEventListener('resize', ()=>{ layout(); render(); });
 
   newGame();
 </script>
