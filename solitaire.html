@@ -137,7 +137,7 @@
     document.getElementById('msg').textContent='';
     document.getElementById('winForm').style.display='none';
     if(!timerId && started) startTimer();
-    updateUndoBtn(); render();
+    updateUndoBtn(); renderAnimated(); afterMove();
   }
 
   function newGame(){
@@ -196,12 +196,12 @@
       if(waste.length===0) return;
       commit();
       while(waste.length){ const c=waste.pop(); c.up=false; stock.push(c); }
-      bumpMove(); render(); return;
+      bumpMove(); renderAnimated(); afterMove(); return;
     }
     commit();
     const n=Math.min(drawMode, stock.length);
     for(let i=0;i<n;i++){ const c=stock.pop(); c.up=true; waste.push(c); }
-    bumpMove(); render();
+    bumpMove(); renderAnimated(); afterMove();
   }
 
   function canPickup(pile, idx, cardIdx){
@@ -236,7 +236,7 @@
       commit();
       foundations[f].push(arr.pop());
       if(pile==='tab' && arr.length && !arr[arr.length-1].up) arr[arr.length-1].up=true;
-      bumpMove(); checkWin(); render(); return true;
+      bumpMove(); checkWin(); return true;
     }
     return false;
   }
@@ -274,7 +274,7 @@
     suppress=false;
     if(any){ history.push(snap); if(history.length>300) history.shift(); updateUndoBtn(); }
     else document.getElementById('msg').textContent='Keine Karte kann gerade abgelegt werden.';
-    render();
+    renderAnimated(); afterMove();
   }
 
   // ---- Hinweis: sinnvollen Zug in Prioritätsreihenfolge suchen ----
@@ -347,7 +347,7 @@
     if(hint){ hint=null; if(hintTimer){clearTimeout(hintTimer);hintTimer=null;} }
     const pile=el.dataset.pile, idx=+el.dataset.idx, cardIdx=+el.dataset.card;
 
-    if(pile==='stock'){ sel=null; draw(); render(); return; }
+    if(pile==='stock'){ sel=null; draw(); return; }
 
     // Doppeltipp -> automatisch auf den nächsten passenden Platz
     const key=pile+idx+cardIdx, now=Date.now();
@@ -355,7 +355,7 @@
     if(isCard && key===lastTap.key && now-lastTap.t<350){
       lastTap={key:'',t:0}; sel=null;
       autoMove(pile,idx,cardIdx);
-      render(); return;
+      renderAnimated(); afterMove(); return;
     }
     lastTap={key,t:now};
 
@@ -366,7 +366,7 @@
     // Es liegt eine Auswahl vor
     if(sel.pile===pile && sel.idx===idx && sel.card===cardIdx){ sel=null; render(); return; } // abwählen
     if(pile==='found' || pile==='tab'){
-      if(tryMove(sel.pile, sel.idx, sel.card, pile, idx)){ sel=null; render(); return; }
+      if(tryMove(sel.pile, sel.idx, sel.card, pile, idx)){ sel=null; renderAnimated(); afterMove(); return; }
     }
     // Zug ungültig -> ggf. neue Auswahl treffen
     if(isCard && canPickup(pile,idx,cardIdx)) sel={pile,idx,card:cardIdx}; else sel=null;
@@ -378,7 +378,7 @@
     const d=document.createElement('div');
     d.className='card'+(card.up?'':' down')+(isRed(card.suit)?' red':'');
     d.style.top=topPx+'px';
-    d.dataset.pile=pile; d.dataset.idx=idx; d.dataset.card=cardIdx;
+    d.dataset.pile=pile; d.dataset.idx=idx; d.dataset.card=cardIdx; d.dataset.cid=card.suit+'-'+card.rank;
     if(sel && sel.pile===pile && sel.idx===idx && cardIdx>=sel.card) d.classList.add('sel');
     if(card.up){
       var center;
@@ -442,6 +442,55 @@
       cols.appendChild(col);
     }
     applyHint();
+  }
+
+  // ---- Sanfte Kartenanimation (FLIP): von alter zu neuer Position gleiten ----
+  function renderAnimated(){
+    const first=new Map();
+    document.querySelectorAll('#table .card').forEach(el=>{
+      if(el.dataset.cid) first.set(el.dataset.cid, el.getBoundingClientRect());
+    });
+    render();
+    document.querySelectorAll('#table .card').forEach(el=>{
+      const id=el.dataset.cid; if(!id) return;
+      const f=first.get(id); if(!f) return;
+      const l=el.getBoundingClientRect();
+      const dx=f.left-l.left, dy=f.top-l.top;
+      if(dx||dy){
+        el.style.transition='none';
+        el.style.transform='translate('+dx+'px,'+dy+'px)';
+        requestAnimationFrame(()=>{ el.style.transition='transform .2s ease'; el.style.transform=''; });
+      }
+    });
+  }
+
+  // ---- Erkennen, ob überhaupt noch ein Zug möglich ist ----
+  function anyMove(){
+    // Züge im Spielfeld
+    for(let t=0;t<7;t++){
+      const col=tableau[t]; const fu=firstUp(col); if(fu<0) continue;
+      for(let i=fu;i<col.length;i++){
+        const run=col.slice(i); if(!validRun(run)) continue;
+        if(run.length===1) for(let f=0;f<4;f++) if(foundationAccepts(f,run[0])) return true;
+        for(let d=0;d<7;d++){ if(d===t) continue; if(tableauAccepts(tableau[d],run[0])) return true; }
+      }
+    }
+    // Jede Karte im Ablage- oder Ziehstapel ist per Ziehen/Umlegen erreichbar
+    const pool=waste.concat(stock);
+    for(const c of pool){
+      for(let f=0;f<4;f++) if(foundationAccepts(f,c)) return true;
+      for(let d=0;d<7;d++) if(tableauAccepts(tableau[d],c)) return true;
+    }
+    // Karte vom Ass-Feld zurück ins Spielfeld
+    for(let f=0;f<4;f++){ const fa=foundations[f]; if(!fa.length) continue; const c=fa[fa.length-1];
+      for(let d=0;d<7;d++) if(tableauAccepts(tableau[d],c)) return true; }
+    return false;
+  }
+  function afterMove(){
+    if(won) return;
+    const msg=document.getElementById('msg');
+    if(!anyMove()) msg.textContent='🚫 Keine Züge mehr möglich – Rückgängig oder Neues Spiel.';
+    else if(msg.textContent.indexOf('Keine Züge')>=0) msg.textContent='';
   }
 
   // ---- Bestenliste ----
