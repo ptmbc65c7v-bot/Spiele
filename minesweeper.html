@@ -117,6 +117,13 @@
       font-size: 14px;
     }
     #leaderboard th { background: #f0f0f0; }
+    #stats { display:none; margin-top:16px; width:100%; max-width:340px; background:#fff; border:1px solid #ccc; border-radius:12px; padding:14px 16px; color:#222; }
+    #stats h3 { margin:0 0 10px; font-size:16px; }
+    .statgrid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+    .statcard { background:#f0f0f0; border-radius:8px; padding:8px 6px; text-align:center; }
+    .statcard .v { font-size:21px; font-weight:bold; }
+    .statcard .l { font-size:11px; color:#666; }
+    #stats .reset { margin-top:14px; font-size:12px; color:#666; background:none; border:none; cursor:pointer; text-decoration:underline; padding:0; }
     .num1 { color:#0000ff; } .num2 { color:#008000; } .num3 { color:#ff0000; }
     .num4 { color:#000080; } .num5 { color:#800000; } .num6 { color:#008080; }
     .num7 { color:#000000; } .num8 { color:#808080; }
@@ -133,6 +140,7 @@
     </label>
     <button onclick="initGame()">Neues Spiel</button>
     <button id="flagBtn" onclick="toggleFlagMode()">🚩 Flaggen-Modus: aus</button>
+    <button onclick="toggleStats()">📊 Statistik</button>
   </div>
 
   <div id="panel">
@@ -149,6 +157,7 @@
 
   <div id="boardWrap"><div id="board"></div></div>
 
+  <div id="stats"></div>
   <div id="leaderboard"></div>
 
   <script>
@@ -241,6 +250,7 @@
       renderBoard();
       updateCounter();
       renderLeaderboard();
+      renderStats();
     }
 
     function placeMines(safeR, safeC) {
@@ -346,6 +356,7 @@
       if (cell.mine) {
         gameOver = true;
         stopTimer();
+        recordResult(false, 0);
         revealAllMines();
         document.getElementById('status').textContent = 'Boom! Spiel vorbei.';
       } else {
@@ -392,10 +403,11 @@
       // Gewonnen
       gameOver = true;
       stopTimer();
+      recordResult(true, seconds);
       document.getElementById('status').textContent =
         'Glückwunsch, gewonnen in ' + fmtTime(seconds) + '!';
       pendingScore = { diff: diffKey, time: seconds };
-      document.getElementById('playerName').value = '';
+      document.getElementById('playerName').value = store.get('player_name') || '';
       document.getElementById('winForm').style.display = 'flex';
     }
 
@@ -409,6 +421,7 @@
       if (!pendingScore) return;
       let name = document.getElementById('playerName').value.trim();
       if (!name) name = 'Anonym';
+      store.set('player_name', name);
       const list = loadScores(pendingScore.diff);
       list.push({
         name: name,
@@ -445,6 +458,48 @@
       return str.replace(/[&<>"']/g, ch => ({
         '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
       }[ch]));
+    }
+
+    // ---- Statistik (pro Schwierigkeit, lokal) ----
+    function statsKey(){ return 'minesweeperstats_' + diffKey; }
+    function blankStats(){ return { played:0, won:0, curStreak:0, bestStreak:0, sumTime:0, bestTime:0 }; }
+    function loadStats(){ const raw = store.get(statsKey()); if(raw){ try{ return Object.assign(blankStats(), JSON.parse(raw)); }catch(e){} } return blankStats(); }
+    function recordResult(won, time){
+      const s = loadStats();
+      s.played++;
+      if(won){
+        s.won++; s.curStreak++;
+        if(s.curStreak > s.bestStreak) s.bestStreak = s.curStreak;
+        s.sumTime += time; if(!s.bestTime || time < s.bestTime) s.bestTime = time;
+      } else { s.curStreak = 0; }
+      store.set(statsKey(), JSON.stringify(s));
+      renderStats();
+    }
+    function resetStats(){
+      if(!confirm('Statistik für diese Schwierigkeit wirklich löschen?')) return;
+      store.set(statsKey(), JSON.stringify(blankStats())); renderStats();
+    }
+    function toggleStats(){
+      const el = document.getElementById('stats');
+      const show = getComputedStyle(el).display === 'none';
+      el.style.display = show ? 'block' : 'none';
+      if(show){ renderStats(); el.scrollIntoView({behavior:'smooth', block:'nearest'}); }
+    }
+    function statCard(v,l){ return '<div class="statcard"><div class="v">'+v+'</div><div class="l">'+l+'</div></div>'; }
+    function renderStats(){
+      const el = document.getElementById('stats'); if(!el) return;
+      const s = loadStats();
+      const label = { leicht:'Leicht', mittel:'Mittel', schwer:'Schwer' }[diffKey] || diffKey;
+      const winRate = s.played ? Math.round(s.won / s.played * 100) : 0;
+      const bestT = s.bestTime ? fmtTime(s.bestTime) : '–';
+      const avgT = s.won ? fmtTime(Math.round(s.sumTime / s.won)) : '–';
+      el.innerHTML = '<h3>Statistik – ' + label + '</h3>' +
+        '<div class="statgrid">' +
+          statCard(s.played,'Gespielt') + statCard(winRate + '%','Gewinnrate') +
+          statCard(s.curStreak,'Serie') + statCard(s.bestStreak,'Beste Serie') +
+          statCard(bestT,'Beste Zeit') + statCard(avgT,'⌀ Zeit') +
+        '</div>' +
+        '<button class="reset" onclick="resetStats()">Statistik zurücksetzen</button>';
     }
 
     initGame();

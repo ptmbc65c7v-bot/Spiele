@@ -79,6 +79,13 @@
   #lb table { border-collapse:collapse; width:100%; }
   #lb th,#lb td { border:1px solid var(--line); padding:4px 8px; font-size:14px; text-align:left; }
   #lb th { background:var(--th); }
+  #stats { display:none; margin-top:16px; width:100%; max-width:340px; border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  #stats h3 { margin:0 0 10px; font-size:16px; }
+  .statgrid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .statcard { background:var(--th); border-radius:8px; padding:8px 6px; text-align:center; }
+  .statcard .v { font-size:21px; font-weight:bold; }
+  .statcard .l { font-size:11px; color:var(--muted); }
+  #stats .reset { margin-top:14px; font-size:12px; color:var(--muted); background:none; border:none; cursor:pointer; text-decoration:underline; padding:0; }
   #status { min-height:20px; font-weight:bold; margin:4px 0; }
 </style>
 </head>
@@ -94,6 +101,7 @@
       </select>
     </label>
     <button class="btn" onclick="newGame()">Neues Spiel</button>
+    <button class="btn" onclick="toggleStats()">📊 Statistik</button>
   </div>
 
   <div id="info">
@@ -111,6 +119,7 @@
     <button class="btn" onclick="saveScore()">Speichern</button>
   </div>
 
+  <div id="stats"></div>
   <div id="lb"></div>
 
 <script>
@@ -185,6 +194,7 @@
 
   function newGame(){
     diff=document.getElementById('difficulty').value;
+    if(document.getElementById('stats')) renderStats();
     stopTimer(); seconds=0; started=false; solved=false; mistakes=0; selected=-1;
     document.getElementById('timer').textContent='0:00';
     document.getElementById('mistakes').textContent='0';
@@ -354,8 +364,9 @@
   function checkWin(){
     for(let i=0;i<81;i++) if(values[i]!==solution[i]) return;
     solved=true; stopTimer();
+    recordSolve(seconds, mistakes); renderStats();
     document.getElementById('status').textContent='🎉 Gelöst in '+fmt(seconds)+'! Fehler: '+mistakes;
-    document.getElementById('playerName').value='';
+    document.getElementById('playerName').value=store.get('player_name')||'';
     document.getElementById('winForm').style.display='flex';
   }
 
@@ -363,6 +374,7 @@
   function loadScores(d){ const raw=store.get('sudoku_'+d); if(!raw) return []; try{return JSON.parse(raw);}catch(e){return [];} }
   function saveScore(){
     let name=document.getElementById('playerName').value.trim()||'Anonym';
+    store.set('player_name', name);
     const list=loadScores(diff);
     list.push({ name, time:seconds, mistakes, date:new Date().toISOString().slice(0,10) });
     list.sort((a,b)=> a.time-b.time || a.mistakes-b.mistakes);
@@ -384,7 +396,47 @@
     document.getElementById('lb').innerHTML=html;
   }
 
-  newGame();
+  // ---------- Statistik (pro Schwierigkeit, lokal) ----------
+  function statsKey(){ return 'sudokustats_'+diff; }
+  function blankStats(){ return { solved:0, sumTime:0, bestTime:0, sumMistakes:0, bestMistakes:-1, flawless:0 }; }
+  function loadStats(){ const raw=store.get(statsKey()); if(raw){ try{ return Object.assign(blankStats(), JSON.parse(raw)); }catch(e){} } return blankStats(); }
+  function recordSolve(time, mist){
+    const s=loadStats();
+    s.solved++;
+    s.sumTime+=time; if(!s.bestTime || time<s.bestTime) s.bestTime=time;
+    s.sumMistakes+=mist; if(s.bestMistakes<0 || mist<s.bestMistakes) s.bestMistakes=mist;
+    if(mist===0) s.flawless++;
+    store.set(statsKey(), JSON.stringify(s));
+  }
+  function resetStats(){
+    const label={leicht:'Leicht',mittel:'Mittel',schwer:'Schwer',experte:'Experte'}[diff];
+    if(!confirm('Statistik für '+label+' wirklich löschen?')) return;
+    store.set(statsKey(), JSON.stringify(blankStats())); renderStats();
+  }
+  function toggleStats(){
+    const el=document.getElementById('stats');
+    const show = getComputedStyle(el).display==='none';
+    el.style.display = show ? 'block' : 'none';
+    if(show){ renderStats(); el.scrollIntoView({behavior:'smooth', block:'nearest'}); }
+  }
+  function statCard(v,l){ return '<div class="statcard"><div class="v">'+v+'</div><div class="l">'+l+'</div></div>'; }
+  function renderStats(){
+    const el=document.getElementById('stats'); const s=loadStats();
+    const label={leicht:'Leicht',mittel:'Mittel',schwer:'Schwer',experte:'Experte'}[diff];
+    const avgT = s.solved ? fmt(Math.round(s.sumTime/s.solved)) : '–';
+    const bestT= s.bestTime ? fmt(s.bestTime) : '–';
+    const avgM = s.solved ? (s.sumMistakes/s.solved).toFixed(1) : '–';
+    const bestM= s.bestMistakes>=0 ? s.bestMistakes : '–';
+    el.innerHTML='<h3>Statistik – '+label+'</h3>'+
+      '<div class="statgrid">'+
+        statCard(s.solved,'Gelöst')+statCard(s.flawless,'Fehlerfrei')+
+        statCard(bestT,'Beste Zeit')+statCard(avgT,'⌀ Zeit')+
+        statCard(bestM,'Wenigste Fehler')+statCard(avgM,'⌀ Fehler')+
+      '</div>'+
+      '<button class="reset" onclick="resetStats()">Statistik zurücksetzen</button>';
+  }
+
+  newGame(); renderStats();
 </script>
 </body>
 </html>

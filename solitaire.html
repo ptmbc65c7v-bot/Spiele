@@ -58,6 +58,13 @@
              box-shadow:0 3px 12px rgba(0,0,0,0.35); max-width:340px; }
   #placard .big { font-size:23px; display:block; margin-bottom:4px; }
   #lb tr.me td { background:var(--sel); color:#222; font-weight:bold; }
+  #stats { display:none; margin-top:14px; width:100%; max-width:340px; background:var(--panel); color:var(--panel-fg); border:1px solid var(--panel-border); border-radius:12px; padding:14px 16px; }
+  #stats h3 { margin:0 0 10px; font-size:16px; }
+  .statgrid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .statcard { border:1px solid var(--panel-border); border-radius:8px; padding:8px 6px; text-align:center; }
+  .statcard .v { font-size:21px; font-weight:bold; }
+  .statcard .l { font-size:11px; opacity:.7; }
+  #stats .reset { margin-top:14px; font-size:12px; opacity:.7; color:inherit; background:none; border:none; cursor:pointer; text-decoration:underline; padding:0; }
 </style>
 </head>
 <body>
@@ -73,6 +80,7 @@
     <button class="btn" id="undoBtn" onclick="undo()">↶ Rückgängig</button>
     <button class="btn" onclick="showHint()">💡 Hinweis</button>
     <button class="btn" onclick="autoFinish()">Auto-Ablage</button>
+    <button class="btn" onclick="toggleStats()">📊 Statistik</button>
   </div>
   <div id="stat"><span>Zeit: <span id="timer">0:00</span></span><span>Züge: <span id="moves">0</span></span></div>
 
@@ -90,6 +98,7 @@
   <div id="msg"></div>
   <div id="winForm"><label>Name: <input id="pname" maxlength="20" placeholder="Anonym"></label><button class="btn" onclick="saveScore()">Speichern</button></div>
   <div id="placard"></div>
+  <div id="stats"></div>
   <div id="lb"></div>
 
 <script>
@@ -143,6 +152,7 @@
   function newGame(){
     layout();
     drawMode=+document.getElementById('drawMode').value;
+    if(document.getElementById('stats')) renderStats();
     stopTimer(); seconds=0; started=false; won=false; moves=0; sel=null;
     history=[]; suppress=false; hint=null; if(hintTimer){clearTimeout(hintTimer);hintTimer=null;}
     lastEntryId=null; document.getElementById('placard').style.display='none';
@@ -335,8 +345,9 @@
   function checkWin(){
     const total=foundations.reduce((a,f)=>a+f.length,0);
     if(total===52){ won=true; stopTimer();
+      recordWin(seconds, moves); renderStats();
       document.getElementById('msg').textContent='🎉 Gewonnen in '+fmt(seconds)+' ('+moves+' Zügen)!';
-      document.getElementById('pname').value='';
+      document.getElementById('pname').value=store.get('player_name')||'';
       document.getElementById('winForm').style.display='flex';
     }
   }
@@ -497,6 +508,7 @@
   function loadScores(){ const raw=store.get('klondike_'+drawMode); if(!raw)return[]; try{return JSON.parse(raw);}catch(e){return[];} }
   function saveScore(){
     const name=document.getElementById('pname').value.trim()||'Anonym';
+    store.set('player_name', name);
     const entry={ id:Date.now()+'-'+Math.random().toString(36).slice(2,7), name, time:seconds, moves, date:new Date().toISOString().slice(0,10) };
     const list=loadScores(); list.push(entry);
     list.sort((a,b)=>a.time-b.time || a.moves-b.moves);
@@ -531,7 +543,43 @@
       html+='</table>'; }
     document.getElementById('lb').innerHTML=html;
   }
-  document.getElementById('drawMode').addEventListener('change', renderLB);
+  // ---- Statistik (pro Ziehvariante, lokal) ----
+  function statsKey(){ return 'solitairestats_'+drawMode; }
+  function blankStats(){ return { won:0, sumTime:0, bestTime:0, sumMoves:0, bestMoves:0 }; }
+  function loadStats(){ const raw=store.get(statsKey()); if(raw){ try{ return Object.assign(blankStats(), JSON.parse(raw)); }catch(e){} } return blankStats(); }
+  function recordWin(time, mv){
+    const s=loadStats(); s.won++;
+    s.sumTime+=time; if(!s.bestTime || time<s.bestTime) s.bestTime=time;
+    s.sumMoves+=mv; if(!s.bestMoves || mv<s.bestMoves) s.bestMoves=mv;
+    store.set(statsKey(), JSON.stringify(s));
+  }
+  function resetStats(){
+    if(!confirm('Statistik für '+drawMode+'er-Ziehen wirklich löschen?')) return;
+    store.set(statsKey(), JSON.stringify(blankStats())); renderStats();
+  }
+  function toggleStats(){
+    const el=document.getElementById('stats');
+    const show = getComputedStyle(el).display==='none';
+    el.style.display = show ? 'block' : 'none';
+    if(show){ renderStats(); el.scrollIntoView({behavior:'smooth', block:'nearest'}); }
+  }
+  function statCard(v,l){ return '<div class="statcard"><div class="v">'+v+'</div><div class="l">'+l+'</div></div>'; }
+  function renderStats(){
+    const el=document.getElementById('stats'); const s=loadStats();
+    const avgT=s.won?fmt(Math.round(s.sumTime/s.won)):'–';
+    const bestT=s.bestTime?fmt(s.bestTime):'–';
+    const avgM=s.won?Math.round(s.sumMoves/s.won):'–';
+    const bestM=s.bestMoves||'–';
+    el.innerHTML='<h3>Statistik – '+drawMode+' Karte'+(drawMode>1?'n':'')+'</h3>'+
+      '<div class="statgrid">'+
+        '<div class="statcard" style="grid-column:1/-1"><div class="v">'+s.won+'</div><div class="l">Gewonnene Spiele</div></div>'+
+        statCard(bestT,'Beste Zeit')+statCard(avgT,'⌀ Zeit')+
+        statCard(bestM,'Wenigste Züge')+statCard(avgM,'⌀ Züge')+
+      '</div>'+
+      '<button class="reset" onclick="resetStats()">Statistik zurücksetzen</button>';
+  }
+
+  document.getElementById('drawMode').addEventListener('change', ()=>{ renderLB(); renderStats(); });
   window.addEventListener('resize', ()=>{ layout(); render(); });
 
   newGame();

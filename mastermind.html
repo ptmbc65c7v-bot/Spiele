@@ -78,6 +78,18 @@
   #lb th,#lb td { border:1px solid var(--line); padding:4px 8px; font-size:14px; text-align:left; }
   #lb th { background:var(--surface2); }
   #lb tr.me td { background:var(--sel); color:#222; font-weight:bold; }
+  #stats { display:none; margin-top:16px; width:100%; max-width:360px; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  #stats h3 { margin:0 0 10px; font-size:16px; }
+  .statgrid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:14px; }
+  .statcard { background:var(--surface2); border-radius:8px; padding:8px 6px; text-align:center; }
+  .statcard .v { font-size:21px; font-weight:bold; }
+  .statcard .l { font-size:11px; color:var(--muted); }
+  .dist { display:flex; flex-direction:column; gap:4px; }
+  .distrow { display:flex; align-items:center; gap:8px; }
+  .distrow .n { width:16px; text-align:right; font-size:13px; color:var(--muted); }
+  .distrow .bar { height:15px; background:var(--accent); border-radius:4px; min-width:2px; }
+  .distrow .c { font-size:12px; color:var(--muted); }
+  #stats .reset { margin-top:14px; font-size:12px; color:var(--muted); background:none; border:none; cursor:pointer; text-decoration:underline; padding:0; }
 </style>
 </head>
 <body>
@@ -93,6 +105,7 @@
       </select>
     </label>
     <button class="btn" onclick="newGame()">Neues Spiel</button>
+    <button class="btn" onclick="toggleStats()">📊 Statistik</button>
   </div>
 
   <div id="info"><span>Versuche übrig: <span id="left">–</span></span><span>Zeit: <span id="timer">0:00</span></span></div>
@@ -106,6 +119,7 @@
 
   <div id="winForm"><label>Name: <input id="pname" maxlength="20" placeholder="Anonym"></label><button class="btn" onclick="saveScore()">Speichern</button></div>
   <div id="placard"></div>
+  <div id="stats"></div>
   <div id="lb"></div>
 
 <script>
@@ -145,7 +159,7 @@
     code=[]; for(let i=0;i<len;i++) code.push(Math.floor(Math.random()*numColors));
     rows=[]; curGuess=new Array(len).fill(null);
     activeColor=0;
-    buildPalette(); render(); renderLB(); updateInfo();
+    buildPalette(); render(); renderLB(); updateInfo(); renderStats();
   }
 
   function updateInfo(){ document.getElementById('left').textContent = (solved||lost) ? '–' : (maxRows-rows.length); }
@@ -233,9 +247,9 @@
     const fb=scoreGuess(curGuess);
     rows.push({guess:curGuess.slice(), fb});
     curGuess=new Array(len).fill(null);
-    if(fb.black===len){ solved=true; stopTimer(); onWin(); }
-    else if(rows.length>=maxRows){ lost=true; stopTimer(); onLose(); }
-    render(); updateInfo();
+    if(fb.black===len){ solved=true; stopTimer(); recordResult(true, rows.length, seconds); onWin(); }
+    else if(rows.length>=maxRows){ lost=true; stopTimer(); recordResult(false, 0, seconds); onLose(); }
+    render(); updateInfo(); renderStats();
   }
 
   function showCode(){
@@ -247,7 +261,7 @@
   function onWin(){
     const tries=rows.length;
     document.getElementById('status').textContent='🎉 Geknackt in '+tries+' Versuch'+(tries>1?'en':'')+' ('+fmt(seconds)+')!';
-    document.getElementById('pname').value='';
+    document.getElementById('pname').value=store.get('player_name')||'';
     document.getElementById('winForm').style.display='flex';
   }
   function onLose(){
@@ -265,6 +279,7 @@
   function loadScores(){ const raw=store.get('mastermind_'+diffKey); if(!raw)return[]; try{return JSON.parse(raw);}catch(e){return[];} }
   function saveScore(){
     const name=document.getElementById('pname').value.trim()||'Anonym';
+    store.set('player_name', name);
     const entry={ id:Date.now()+'-'+Math.random().toString(36).slice(2,7), name, guesses:rows.length, time:seconds, date:new Date().toISOString().slice(0,10) };
     const list=loadScores(); list.push(entry);
     list.sort((a,b)=> a.guesses-b.guesses || a.time-b.time);
@@ -298,6 +313,67 @@
     }
     document.getElementById('lb').innerHTML=html;
   }
+  // ---- Statistik (pro Schwierigkeit, lokal) ----
+  function statsKey(){ return 'mmstats_'+diffKey; }
+  function blankStats(){ return { played:0, won:0, curStreak:0, bestStreak:0, sumGuesses:0, bestGuesses:0, sumTime:0, bestTime:0, dist:{} }; }
+  function loadStats(){ const raw=store.get(statsKey()); if(raw){ try{ return Object.assign(blankStats(), JSON.parse(raw)); }catch(e){} } return blankStats(); }
+  function recordResult(won, guesses, time){
+    const s=loadStats();
+    s.played++;
+    if(won){
+      s.won++; s.curStreak++;
+      if(s.curStreak>s.bestStreak) s.bestStreak=s.curStreak;
+      s.sumGuesses+=guesses;
+      if(!s.bestGuesses || guesses<s.bestGuesses) s.bestGuesses=guesses;
+      s.sumTime+=time;
+      if(!s.bestTime || time<s.bestTime) s.bestTime=time;
+      s.dist[guesses]=(s.dist[guesses]||0)+1;
+    } else { s.curStreak=0; }
+    store.set(statsKey(), JSON.stringify(s));
+  }
+  function resetStats(){
+    if(!confirm('Statistik für '+DIFF[diffKey].label+' wirklich löschen?')) return;
+    store.set(statsKey(), JSON.stringify(blankStats()));
+    renderStats();
+  }
+  function toggleStats(){
+    const el=document.getElementById('stats');
+    const show = getComputedStyle(el).display==='none';
+    el.style.display = show ? 'block' : 'none';
+    if(show){ renderStats(); el.scrollIntoView({behavior:'smooth', block:'nearest'}); }
+  }
+  function statCard(v,l){ return '<div class="statcard"><div class="v">'+v+'</div><div class="l">'+l+'</div></div>'; }
+  function renderStats(){
+    const el=document.getElementById('stats');
+    const s=loadStats();
+    const winRate = s.played ? Math.round(s.won/s.played*100) : 0;
+    const avgG = s.won ? (s.sumGuesses/s.won).toFixed(1) : '–';
+    const bestG = s.bestGuesses || '–';
+    const avgT = s.won ? fmt(Math.round(s.sumTime/s.won)) : '–';
+    const bestT = s.bestTime ? fmt(s.bestTime) : '–';
+    const failed = s.played - s.won;
+    let maxC=1;
+    for(let g=1; g<=maxRows; g++) maxC=Math.max(maxC, s.dist[g]||0);
+    maxC=Math.max(maxC, failed);
+    let dist='';
+    for(let g=1; g<=maxRows; g++){
+      const c=s.dist[g]||0;
+      dist+='<div class="distrow"><span class="n">'+g+'</span><div class="bar" style="width:'+(c/maxC*100)+'%"></div><span class="c">'+c+'</span></div>';
+    }
+    dist+='<div class="distrow"><span class="n">✗</span><div class="bar" style="width:'+(failed/maxC*100)+'%;background:var(--muted)"></div><span class="c">'+failed+'</span></div>';
+    el.innerHTML =
+      '<h3>Statistik – '+DIFF[diffKey].label+'</h3>'+
+      '<div class="statgrid">'+
+        statCard(s.played,'Gespielt')+statCard(winRate+'%','Gewinnrate')+
+        statCard(s.curStreak,'Serie')+statCard(s.bestStreak,'Beste Serie')+
+        statCard(avgG,'⌀ Versuche')+statCard(bestG,'Wenigste')+
+        statCard(avgT,'⌀ Zeit')+statCard(bestT,'Beste Zeit')+
+      '</div>'+
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Siege nach Anzahl Versuche (✗ = nicht geschafft)</div>'+
+      '<div class="dist">'+dist+'</div>'+
+      '<button class="reset" onclick="resetStats()">Statistik zurücksetzen</button>';
+  }
+
   document.getElementById('difficulty').addEventListener('change', ()=>{
     const inProgress = curGuess.some(v=>v!=null) || (rows.length>0 && !solved && !lost);
     if(inProgress && !confirm('Laufendes Spiel abbrechen und neu starten?')){
