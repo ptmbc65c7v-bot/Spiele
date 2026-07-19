@@ -251,8 +251,14 @@
     document.getElementById('winForm').style.display='flex';
   }
   function onLose(){
-    document.getElementById('status').textContent='Verloren – der Code wird gezeigt.';
-    showCode();
+    document.getElementById('status').textContent='Verloren – keine Versuche mehr.';
+    let pegs='';
+    code.forEach(c=>{ pegs+='<div class="peg filled" style="background:'+COLORS[c]+'"></div>'; });
+    const p=document.getElementById('placard');
+    p.innerHTML='<span class="big">Verloren 😕</span>Der geheime Code war:'
+      +'<div style="display:flex;gap:8px;justify-content:center;margin-top:10px;">'+pegs+'</div>';
+    p.style.display='block';
+    p.scrollIntoView({behavior:'smooth', block:'center'});
   }
 
   // ---- Bestenliste ----
