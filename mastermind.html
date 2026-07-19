@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mastermind</title>
+<style>
+  :root{
+    color-scheme: light dark;
+    --bg:#f4f5f7; --fg:#1f2430; --surface:#ffffff; --surface2:#eceef2; --line:#d3d7de; --muted:#6b7280;
+    --accent:#4a6cf7; --accent-fg:#fff;
+    --ps:34px;
+    --fbblack:#222; --fbwhite:#fff; --fbempty:#c4c8d0;
+    --sel:#f1c40f;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#161a21; --fg:#e6e8ec; --surface:#222833; --surface2:#2b323e; --line:#3a424f; --muted:#98a1af;
+      --accent:#6d8bff; --accent-fg:#0b1020;
+      --fbblack:#0b0e13; --fbwhite:#e8ebf0; --fbempty:#485062;
+    }
+  }
+  @media (min-width:768px){
+    :root{ --ps:46px; }
+    select, .btn { font-size:17px; }
+    #info { font-size:18px; }
+    #lb th, #lb td { font-size:16px; padding:6px 10px; }
+  }
+  @media (min-width:1024px){ :root{ --ps:56px; } }
+
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family:sans-serif; display:flex; flex-direction:column; align-items:center; margin:14px; background:var(--bg); color:var(--fg); }
+  h2 { margin:4px 0; }
+  #hint { font-size:13px; color:var(--muted); margin-bottom:8px; text-align:center; max-width:340px; }
+  #top { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center; margin-bottom:8px; }
+  select, .btn { padding:7px 11px; border:2px solid var(--line); border-radius:6px; background:var(--surface); color:var(--fg); cursor:pointer; font-size:14px; }
+  #info { display:flex; gap:16px; font-weight:bold; margin-bottom:6px; font-size:15px; }
+  #status { min-height:20px; font-weight:bold; margin:4px 0; text-align:center; }
+
+  #reveal { display:none; align-items:center; gap:8px; margin:6px 0 10px; font-weight:bold; }
+  #reveal .pegs { display:flex; gap:6px; }
+
+  #board { display:flex; flex-direction:column; gap:6px; }
+  .row { display:flex; align-items:center; gap:12px; padding:4px 8px; border-radius:10px; }
+  .row.active { background:var(--surface2); }
+  .pegs { display:flex; gap:6px; }
+  .peg {
+    width:var(--ps); height:var(--ps); border-radius:50%;
+  }
+  .peg.empty { border:2px dashed var(--line); background:transparent; }
+  .peg.filled { border:1px solid rgba(0,0,0,.28); box-shadow:inset 0 -2px 4px rgba(0,0,0,.15); }
+  .peg.sel { cursor:pointer; }
+  .fb { display:grid; gap:3px; }
+  .fbpeg { width:calc(var(--ps)*0.34); height:calc(var(--ps)*0.34); border-radius:50%; background:var(--fbempty); }
+  .fbpeg.black { background:var(--fbblack); }
+  .fbpeg.white { background:var(--fbwhite); border:1px solid var(--line); }
+
+  #palette { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin:14px 0 10px; }
+  .pal { width:var(--ps); height:var(--ps); border-radius:50%; cursor:pointer; border:3px solid transparent; box-shadow:inset 0 -2px 4px rgba(0,0,0,.15); }
+  .pal.on { border-color:var(--sel); }
+  .pal.erase { background:var(--surface2); display:flex; align-items:center; justify-content:center; font-size:calc(var(--ps)*0.42); color:var(--fg); box-shadow:none; border:2px solid var(--line); }
+  .pal.erase.on { border-color:var(--sel); }
+
+  #guessBtn { padding:11px 22px; font-size:17px; font-weight:bold; border:none; border-radius:10px; background:var(--accent); color:var(--accent-fg); cursor:pointer; transition:transform .2s ease, box-shadow .2s ease; }
+  #guessBtn:disabled { opacity:.4; cursor:default; box-shadow:none; transform:none; }
+  #guessBtn:not(:disabled){ transform:scale(1.03); box-shadow:0 0 12px var(--accent); }
+  @media (prefers-reduced-motion: no-preference){
+    #guessBtn:not(:disabled){ animation:pulseBtn 1.5s ease-in-out infinite; }
+  }
+  @keyframes pulseBtn{ 0%,100%{ box-shadow:0 0 8px var(--accent); } 50%{ box-shadow:0 0 20px var(--accent); } }
+
+  #winForm { display:none; gap:8px; align-items:center; margin-top:12px; justify-content:center; }
+  #winForm input { padding:6px 8px; border:2px solid var(--line); border-radius:6px; background:var(--surface); color:var(--fg); }
+  #placard { display:none; margin-top:12px; padding:12px 16px; border:3px solid var(--sel); border-radius:10px; background:var(--surface); text-align:center; font-weight:bold; box-shadow:0 3px 12px rgba(0,0,0,.25); }
+  #placard .big { font-size:22px; display:block; margin-bottom:4px; }
+  #lb { margin-top:18px; min-width:280px; }
+  #lb table { border-collapse:collapse; width:100%; }
+  #lb th,#lb td { border:1px solid var(--line); padding:4px 8px; font-size:14px; text-align:left; }
+  #lb th { background:var(--surface2); }
+  #lb tr.me td { background:var(--sel); color:#222; font-weight:bold; }
+</style>
+</head>
+<body>
+  <h2>Mastermind</h2>
+  <div id="hint">Farbe unten wählen, dann auf die Felder der aktiven Reihe tippen. Wenn die Reihe voll ist, auf „Raten" tippen.</div>
+
+  <div id="top">
+    <label>Schwierigkeit:
+      <select id="difficulty">
+        <option value="leicht">Leicht (6 Farben, 4, 12×)</option>
+        <option value="mittel" selected>Mittel (6 Farben, 4, 10×)</option>
+        <option value="schwer">Schwer (8 Farben, 5, 12×)</option>
+      </select>
+    </label>
+    <button class="btn" onclick="newGame()">Neues Spiel</button>
+  </div>
+
+  <div id="info"><span>Versuche übrig: <span id="left">–</span></span><span>Zeit: <span id="timer">0:00</span></span></div>
+  <div id="status"></div>
+  <div id="reveal"><span>Code:</span><div class="pegs" id="revealPegs"></div></div>
+
+  <div id="board"></div>
+
+  <div id="palette"></div>
+  <button id="guessBtn" onclick="submitGuess()">Raten</button>
+
+  <div id="winForm"><label>Name: <input id="pname" maxlength="20" placeholder="Anonym"></label><button class="btn" onclick="saveScore()">Speichern</button></div>
+  <div id="placard"></div>
+  <div id="lb"></div>
+
+<script>
+  const COLORS=['#e74c3c','#3498db','#2ecc71','#f1c40f','#e67e22','#9b59b6','#1abc9c','#ff7bac'];
+  const DIFF={
+    leicht:{colors:6, len:4, rows:12, label:'Leicht'},
+    mittel:{colors:6, len:4, rows:10, label:'Mittel'},
+    schwer:{colors:8, len:5, rows:12, label:'Schwer'}
+  };
+
+  let diffKey='mittel', numColors=6, len=4, maxRows=10;
+  let code=[], rows=[], curGuess=[], activeColor=0;
+  let seconds=0, timerId=null, started=false, solved=false, lost=false;
+  let lastEntryId=null;
+
+  const boardEl=document.getElementById('board');
+  const paletteEl=document.getElementById('palette');
+
+  const memStore={};
+  const store={ get(k){try{return localStorage.getItem(k);}catch(e){return k in memStore?memStore[k]:null;}},
+                set(k,v){try{localStorage.setItem(k,v);}catch(e){memStore[k]=v;}} };
+
+  const fmt=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+  function startTimerOnce(){ if(started) return; started=true; timerId=setInterval(()=>{ seconds++; document.getElementById('timer').textContent=fmt(seconds); },1000); }
+  function stopTimer(){ if(timerId){ clearInterval(timerId); timerId=null; } }
+
+  function newGame(){
+    diffKey=document.getElementById('difficulty').value;
+    const d=DIFF[diffKey]; numColors=d.colors; len=d.len; maxRows=d.rows;
+    stopTimer(); seconds=0; started=false; solved=false; lost=false; lastEntryId=null;
+    document.getElementById('timer').textContent='0:00';
+    document.getElementById('status').textContent='';
+    document.getElementById('reveal').style.display='none';
+    document.getElementById('winForm').style.display='none';
+    document.getElementById('placard').style.display='none';
+
+    code=[]; for(let i=0;i<len;i++) code.push(Math.floor(Math.random()*numColors));
+    rows=[]; curGuess=new Array(len).fill(null);
+    activeColor=0;
+    buildPalette(); render(); renderLB(); updateInfo();
+  }
+
+  function updateInfo(){ document.getElementById('left').textContent = (solved||lost) ? '–' : (maxRows-rows.length); }
+
+  function buildPalette(){
+    paletteEl.innerHTML='';
+    for(let c=0;c<numColors;c++){
+      const b=document.createElement('div'); b.className='pal'; b.style.background=COLORS[c];
+      b.dataset.c=c; b.onclick=()=>selectColor(c);
+      paletteEl.appendChild(b);
+    }
+    const er=document.createElement('div'); er.className='pal erase'; er.textContent='⌫';
+    er.dataset.c='e'; er.onclick=()=>selectColor('e');
+    paletteEl.appendChild(er);
+    selectColor(0);
+  }
+  function selectColor(c){
+    activeColor=c;
+    document.querySelectorAll('.pal').forEach(el=> el.classList.toggle('on', String(el.dataset.c)===String(c)) );
+  }
+
+  // Rückmeldung berechnen: schwarz = Farbe+Position, weiß = nur Farbe
+  function scoreGuess(guess){
+    let black=0; const cCount={}, gCount={};
+    for(let i=0;i<len;i++){
+      if(guess[i]===code[i]) black++;
+      else { cCount[code[i]]=(cCount[code[i]]||0)+1; gCount[guess[i]]=(gCount[guess[i]]||0)+1; }
+    }
+    let white=0;
+    for(const kk in gCount) white += Math.min(gCount[kk], cCount[kk]||0);
+    return {black, white};
+  }
+
+  function render(){
+    boardEl.innerHTML='';
+    for(let r=0;r<maxRows;r++){
+      const submitted = r < rows.length;
+      const isActive = r===rows.length && !solved && !lost;
+      const row=document.createElement('div'); row.className='row'+(isActive?' active':'');
+
+      const pegs=document.createElement('div'); pegs.className='pegs';
+      for(let i=0;i<len;i++){
+        const p=document.createElement('div'); p.className='peg';
+        let val = submitted ? rows[r].guess[i] : (isActive ? curGuess[i] : null);
+        if(val!=null){ p.classList.add('filled'); p.style.background=COLORS[val]; }
+        else p.classList.add('empty');
+        if(isActive){ p.classList.add('sel'); p.dataset.idx=i; }
+        pegs.appendChild(p);
+      }
+      row.appendChild(pegs);
+
+      const fb=document.createElement('div'); fb.className='fb';
+      fb.style.gridTemplateColumns='repeat('+Math.ceil(len/2)+', 1fr)';
+      if(submitted){
+        const {black,white}=rows[r].fb;
+        for(let k=0;k<len;k++){
+          const d=document.createElement('div'); d.className='fbpeg';
+          if(k<black) d.classList.add('black');
+          else if(k<black+white) d.classList.add('white');
+          fb.appendChild(d);
+        }
+      }
+      row.appendChild(fb);
+      boardEl.appendChild(row);
+    }
+    updateGuessBtn();
+  }
+
+  boardEl.addEventListener('click', e=>{
+    const p=e.target.closest('.peg.sel'); if(!p) return;
+    if(solved||lost) return;
+    startTimerOnce();
+    curGuess[+p.dataset.idx] = (activeColor==='e') ? null : activeColor;
+    render();
+  });
+
+  function updateGuessBtn(){
+    document.getElementById('guessBtn').disabled = solved || lost || curGuess.some(v=>v==null);
+  }
+
+  function submitGuess(){
+    if(solved||lost) return;
+    if(curGuess.some(v=>v==null)) return;
+    startTimerOnce();
+    const fb=scoreGuess(curGuess);
+    rows.push({guess:curGuess.slice(), fb});
+    curGuess=new Array(len).fill(null);
+    if(fb.black===len){ solved=true; stopTimer(); onWin(); }
+    else if(rows.length>=maxRows){ lost=true; stopTimer(); onLose(); }
+    render(); updateInfo();
+  }
+
+  function showCode(){
+    const pr=document.getElementById('revealPegs'); pr.innerHTML='';
+    code.forEach(c=>{ const p=document.createElement('div'); p.className='peg filled'; p.style.background=COLORS[c]; pr.appendChild(p); });
+    document.getElementById('reveal').style.display='flex';
+  }
+
+  function onWin(){
+    const tries=rows.length;
+    document.getElementById('status').textContent='🎉 Geknackt in '+tries+' Versuch'+(tries>1?'en':'')+' ('+fmt(seconds)+')!';
+    document.getElementById('pname').value='';
+    document.getElementById('winForm').style.display='flex';
+  }
+  function onLose(){
+    document.getElementById('status').textContent='Verloren – der Code wird gezeigt.';
+    showCode();
+  }
+
+  // ---- Bestenliste ----
+  function loadScores(){ const raw=store.get('mastermind_'+diffKey); if(!raw)return[]; try{return JSON.parse(raw);}catch(e){return[];} }
+  function saveScore(){
+    const name=document.getElementById('pname').value.trim()||'Anonym';
+    const entry={ id:Date.now()+'-'+Math.random().toString(36).slice(2,7), name, guesses:rows.length, time:seconds, date:new Date().toISOString().slice(0,10) };
+    const list=loadScores(); list.push(entry);
+    list.sort((a,b)=> a.guesses-b.guesses || a.time-b.time);
+    const rank=list.findIndex(e=>e.id===entry.id)+1, total=list.length;
+    store.set('mastermind_'+diffKey, JSON.stringify(list.slice(0,10)));
+    lastEntryId=entry.id;
+    document.getElementById('winForm').style.display='none';
+    showCode();
+    showPlacard(rank,total); renderLB();
+  }
+  function showPlacard(rank,total){
+    const p=document.getElementById('placard');
+    let head;
+    if(rank===1) head='🥇 Platz 1 – Bestleistung!';
+    else if(rank===2) head='🥈 Platz 2!';
+    else if(rank===3) head='🥉 Platz 3!';
+    else if(rank<=10) head='🏅 Platz '+rank+' von '+total;
+    else head='Platz '+rank+' – knapp an den Top 10 vorbei';
+    p.innerHTML='<span class="big">'+head+'</span>'+rows.length+' Versuche · '+fmt(seconds)+' · '+DIFF[diffKey].label;
+    p.style.display='block';
+  }
+  function esc(s){ return s.replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+  function renderLB(){
+    const list=loadScores(), medal=['🥇','🥈','🥉'];
+    let html='<h3 style="margin:6px 0;">Rangliste – '+DIFF[diffKey].label+'</h3>';
+    if(!list.length){ html+='<p style="font-size:13px;color:var(--muted);">Noch keine gelösten Spiele.</p>'; }
+    else{
+      html+='<table><tr><th>#</th><th>Name</th><th>Versuche</th><th>Zeit</th><th>Datum</th></tr>';
+      list.forEach((s,i)=>html+='<tr'+(s.id&&s.id===lastEntryId?' class="me"':'')+'><td>'+(medal[i]||(i+1))+'</td><td>'+esc(s.name)+'</td><td>'+s.guesses+'</td><td>'+fmt(s.time)+'</td><td>'+s.date+'</td></tr>');
+      html+='</table>';
+    }
+    document.getElementById('lb').innerHTML=html;
+  }
+  document.getElementById('difficulty').addEventListener('change', ()=>{
+    const inProgress = curGuess.some(v=>v!=null) || (rows.length>0 && !solved && !lost);
+    if(inProgress && !confirm('Laufendes Spiel abbrechen und neu starten?')){
+      document.getElementById('difficulty').value = diffKey;   // Auswahl zurücksetzen
+      return;
+    }
+    newGame();
+  });
+
+  newGame();
+</script>
+</body>
+</html>
